@@ -1,0 +1,43 @@
+image: docker:latest
+services:
+  - name : docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
+    alias: docker
+
+stages:
+- Build image
+- Security scan
+- Test acceptation
+
+build:
+  #image: docker:latest
+  stage: Build image
+  # services:
+  #   - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
+  script:
+    - docker build -t alpinehelloworld .  # Construction de l'image avec le tag "alpinehelloworld"
+    - docker save alpinehelloworld > alpinehelloworld.tar
+  artifacts:
+    paths: 
+      - alpinehelloworld.tar
+
+# Job pour analyser les vulnérabilités de sécurité avec Trivy
+scan_security:
+  stage: Security scan
+  image: aquasec/trivy:v0.29.0
+  script:
+    - trivy image --exit-code 1 --no-progress alpinehelloworld  # Lance le scan sur l'image construite
+  allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
+
+# Job de test d'acceptation
+test acceptance:
+  #image: docker:latest
+  stage: Test acceptation
+  #services:
+  #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
+  #  alias: docker
+  script:
+    - docker load < alpinehelloworld.tar
+    - docker run -d -p 80:5000 -e PORT=5000 --name webapp alpinehelloworld  # Lancement du conteneur à partir de l'image "alpinehelloworld"
+    - sleep 5
+    - apk --no-cache add curl
+    - curl "http://docker" | grep -q "Hello world!"
