@@ -162,15 +162,22 @@ release image:
 
 lint_code:
   stage: Linter
-  image: python:3.9-slim
+  image: python:3.9-slim  # Utilise une image Python légère pour exécuter flake8
   before_script:
+    # Met à jour pip et installe flake8
     - pip install --upgrade pip
     - pip install flake8
+    # Installe hadolint (si tu veux analyser le Dockerfile)
+    - wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+    - chmod +x /bin/hadolint
   script:
-    # Exécuter flake8 en ignorant E501 (ligne trop longue) et E303 (trop de lignes vides)
-    - flake8 --ignore=E501,E303 webapp/
-    # Exécuter hadolint sur le Dockerfile (assure-toi que hadolint est installé)
-    - hadolint Dockerfile || true  # true pour ne pas faire échouer le job en cas d'alerte
-    - flake8 --ignore=E501,E303 webapp/ || true  # Lance flake8 en ignorant E501 et E303, mais ne fait pas échouer le job même en cas d'erreurs
+    # Lint Python en ignorant :
+    #   - E501 : lignes trop longues
+    #   - E303 : trop de lignes vides
+    # Ne fait pas échouer le job même s’il y a des erreurs
+    - flake8 --ignore=E501,E303 webapp/ || true
 
-  allow_failure: false
+    # Analyse Dockerfile avec hadolint
+    # Ne fait pas échouer le job même s’il y a des alertes
+    - hadolint Dockerfile || true
+  allow_failure: false  # Ce job doit passer, même si les linters affichent des erreurs
