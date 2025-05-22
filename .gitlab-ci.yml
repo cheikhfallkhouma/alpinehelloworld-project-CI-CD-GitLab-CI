@@ -8,6 +8,8 @@ stages:
 - Security scan
 - Test acceptation
 - Unit testing
+- Integration testing
+
 
 build:
   #image: docker:latest
@@ -77,7 +79,7 @@ test_unitaires:
   allow_failure: false  # Si les tests échouent, le pipeline échoue
 
 test_integration:
-  stage: test_integration
+  stage: Integration testing
   image: python:3.9-slim
   before_script:
     - pip install --upgrade pip
