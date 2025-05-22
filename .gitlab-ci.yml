@@ -166,4 +166,6 @@ lint_code:
     - flake8 --ignore=E501,E303 webapp/
     # Exécuter hadolint sur le Dockerfile (assure-toi que hadolint est installé)
     - hadolint Dockerfile || true  # true pour ne pas faire échouer le job en cas d'alerte
+    - flake8 --ignore=E501,E303 webapp/ || true  # Lance flake8 en ignorant E501 et E303, mais ne fait pas échouer le job même en cas d'erreurs
+
   allow_failure: false
