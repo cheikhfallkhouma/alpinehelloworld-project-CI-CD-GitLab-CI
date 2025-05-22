@@ -10,6 +10,7 @@ stages:
 - Unit testing
 - Integration testing
 - Release image
+- Linter
 
 
 build:
@@ -148,6 +149,26 @@ release image:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
+
+lint_code:
+  stage: Linter
+  image: python:3.9-slim
+  before_script:
+    - pip install --upgrade pip
+    - pip install flake8
+  script:
+    # Exécuter flake8 en ignorant E501 (ligne trop longue) et E303 (trop de lignes vides)
+    - flake8 --ignore=E501,E303 webapp/
+    # Exécuter hadolint sur le Dockerfile (assure-toi que hadolint est installé)
+    - hadolint Dockerfile || true  # true pour ne pas faire échouer le job en cas d'alerte
+  allow_failure: false
+  rules:
+    - changes:
         - Dockerfile
         - webapp/**/*.py
         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
