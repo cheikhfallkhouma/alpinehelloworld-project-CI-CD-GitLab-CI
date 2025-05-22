@@ -167,10 +167,3 @@ lint_code:
     # Exécuter hadolint sur le Dockerfile (assure-toi que hadolint est installé)
     - hadolint Dockerfile || true  # true pour ne pas faire échouer le job en cas d'alerte
   allow_failure: false
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
