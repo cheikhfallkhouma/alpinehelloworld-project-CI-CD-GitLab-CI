@@ -22,13 +22,13 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 
 # # Job pour analyser les vulnérabilités de sécurité avec Trivy
@@ -53,6 +53,13 @@ scan_security:
   artifacts:
     paths:
       - trivy-report.json
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 # Job de test d'acceptation
 test acceptance:
@@ -67,6 +74,16 @@ test acceptance:
     - sleep 5
     - apk --no-cache add curl
     - curl "http://docker" | grep -q "Hello world!"
+ 
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
+
+  
 
     # Job de tests unitaires
 test_unitaires: 
@@ -86,20 +103,26 @@ test_unitaires:
 
   allow_failure: false  # Si les tests échouent, le pipeline échoue
 
+  rules:
+      - changes:
+          - Dockerfile
+          - webapp/**/*.py
+          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+      - when: never
+
 test_integration:
   stage: Integration testing
   image: python:3.9-slim
   before_script:
     - pip install --upgrade pip
-    - pip install -r webapp/requirements.txt
+    - pip install --root-user-action=ignore -r webapp/requirements.txt
     - pip install pytest
-    - pip install --root-user-action=ignore -r requirements.txt
     - export PYTHONPATH=$PYTHONPATH:$(pwd)
-    # Démarre éventuellement le serveur ou base de test ici
+    # Démarrer le serveur ou base de test si nécessaire
   script:
     - mkdir -p webapp/tests/results
     - pytest webapp/tests/integration/ --junitxml=webapp/tests/results/integration_report.xml
-    
   artifacts:
     paths:
       - webapp/tests/results
