@@ -9,6 +9,7 @@ stages:
 - Test acceptation
 - Unit testing
 - Integration testing
+- Release image
 
 
 build:
@@ -128,3 +129,27 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
+
+release image:
+  stage: Release image
+  script:
+    # Charger l'image Docker à partir du fichier tar
+    - docker load < alpinehelloworld.tar
+    # Taguer l'image Docker avec le nom de l'image et la révision du commit
+    - docker tag alpinehelloworld "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
+    # Taguer l'image Docker avec le nom de l'image et le short SHA du commit
+    - docker tag alpinehelloworld "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+    # Se connecter au registre Docker avec les identifiants spécifiés dans les variables d'environnement
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    # Pousser l'image Docker avec le tag basé sur le nom de la branche (révision du commit)
+    - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
+    # Pousser l'image Docker avec le tag basé sur le short SHA du commit
+    - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
