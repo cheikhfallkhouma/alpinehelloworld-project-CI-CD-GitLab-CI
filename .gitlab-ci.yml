@@ -56,3 +56,26 @@ test acceptance:
     - sleep 5
     - apk --no-cache add curl
     - curl "http://docker" | grep -q "Hello world!"
+
+    # Job de tests unitaires
+test_unitaires: 
+  stage: Test unitaire  
+
+  image: python:3.9-slim  # Utilisation de l'image Docker Python 3.9 allégée
+
+  before_script:
+    - pip install --upgrade pip  # Met à jour pip pour garantir qu'il fonctionne avec les dernières versions des paquets
+    - pip install -r webapp/requirements.txt  # Installe les dépendances du projet à partir du fichier requirements.txt dans le répertoire 'webapp'
+    - pip install pytest  # Installe Pytest pour exécuter les tests unitaires
+
+  script:
+    - mkdir -p webapp/tests/results  # Crée le répertoire pour les résultats des tests (si nécessaire)
+    - pytest webapp/tests.py --junitxml=webapp/tests/results/report.xml  # Exécute les tests dans le fichier 'tests.py' et génère un rapport XML
+
+  artifacts:
+    paths:
+      - webapp/tests/results  # Sauvegarde le répertoire contenant les résultats des tests pour qu'il soit accessible dans GitLab CI
+    when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
+
+  allow_failure: false  # Si les tests échouent, le pipeline échoue
+
