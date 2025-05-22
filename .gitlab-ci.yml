@@ -22,6 +22,14 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
+
 
 # # Job pour analyser les vulnérabilités de sécurité avec Trivy
 # scan_security:
@@ -85,10 +93,13 @@ test_integration:
     - pip install --upgrade pip
     - pip install -r webapp/requirements.txt
     - pip install pytest
+    - pip install --root-user-action=ignore -r requirements.txt
+    - export PYTHONPATH=$PYTHONPATH:$(pwd)
     # Démarre éventuellement le serveur ou base de test ici
   script:
     - mkdir -p webapp/tests/results
     - pytest webapp/tests/integration/ --junitxml=webapp/tests/results/integration_report.xml
+    
   artifacts:
     paths:
       - webapp/tests/results
