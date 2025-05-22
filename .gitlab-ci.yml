@@ -22,13 +22,13 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  #   - when: never
 
 
 # # Job pour analyser les vulnérabilités de sécurité avec Trivy
