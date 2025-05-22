@@ -23,7 +23,7 @@ build:
 # Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
   stage: Security scan
-  image: aquasec/trivy:v0.29.0
+  image: aquasec/trivy:0.45.1
   script:
     - trivy image --exit-code 1 --no-progress alpinehelloworld  # Lance le scan sur l'image construite
   allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
