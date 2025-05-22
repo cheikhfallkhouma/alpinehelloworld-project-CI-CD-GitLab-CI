@@ -104,7 +104,6 @@ test_unitaires:
     when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
 
   allow_failure: false  # Si les tests échouent, le pipeline échoue
-
   rules:
       - changes:
           - Dockerfile
@@ -130,6 +129,13 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 release image:
   stage: Release image
@@ -147,13 +153,12 @@ release image:
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-      changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
+      - changes:
+          - Dockerfile
+          - webapp/**/*.py
+          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+      - when: never
 
 lint_code:
   stage: Linter
