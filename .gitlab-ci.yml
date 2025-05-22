@@ -20,7 +20,7 @@ build:
     paths: 
       - alpinehelloworld.tar
 
-# # Job pour analyser les vulnérabilités de sécurité avec Trivy
+#  Job pour analyser les vulnérabilités de sécurité avec Trivy
 # scan_security:
 #   stage: Security scan
 #   image: aquasec/trivy:0.29.0
