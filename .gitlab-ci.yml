@@ -177,8 +177,8 @@ sonarcloud_scan:
   image: sonarsource/sonar-scanner-cli:latest
   script:
     # Lancer l’analyse SonarCloud avec les paramètres du projet
-    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_mini-projet-alpinehelloworld \
-                    -Dsonar.organization=cheikhfallkhouma \
+    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_alpinehelloworld-project \ 
+                    -Dsonar.organization=alpinehelloworld-project \
                     -Dsonar.sources=. \
                     -Dsonar.host.url=https://sonarcloud.io \
                     -Dsonar.login=${SONAR_TOKEN}
