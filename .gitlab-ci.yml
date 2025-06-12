@@ -213,12 +213,12 @@ release image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-  rules:
-      - changes:
-          - Dockerfile
-          - webapp/**/*.py
-          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-      - when: never
+  # rules:
+  #     - changes:
+  #         - Dockerfile
+  #         - webapp/**/*.py
+  #         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  #     - when: never
 
 
