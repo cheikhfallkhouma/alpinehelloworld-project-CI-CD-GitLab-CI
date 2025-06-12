@@ -67,29 +67,36 @@ build:
         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
     - when: never
 
-
-# # Job pour analyser les vulnérabilités de sécurité avec Trivy
+# Job pour analyser les vulnérabilités de sécurité avec Trivy
 # scan_security:
 #   stage: Security scan
-#   image: aquasec/trivy:0.29.0
+#   image: 
+#     name: aquasec/trivy:0.29.0
+#     entrypoint: [""]
 #   script:
-#     - trivy image --exit-code 1 --no-progress alpinehelloworld  # Lance le scan sur l'image construite
+#     # Utilisation de la commande docker run pour scanner l'image alpinehelloworld
+#     #- docker run --rm aquasec/trivy image alpinehelloworld --exit-code 1 --no-progress  # Lance le scan sur l'image "alpinehelloworld"
+#    - trivy image --severity HIGH,CRITICAL --exit-code 0 --input alpinehelloworld.tar --format table --output trivy-report.json #.html, .txt, .json en fonction des types de dcos souhaités :)
 #   allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
+#   artifacts:
+#     paths:
+#       - trivy-report.json
 
-# Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
   stage: Security scan
   image:
     name: aquasec/trivy:0.29.0
     entrypoint: [""]
   dependencies:
-    - build  # Récupère les artifacts du job "build"
+    - build  # 🔁 Récupère les artifacts du job build
   script:
+    - ls -l  # ✅ Optionnel : pour vérifier que le fichier .tar est bien là
     - trivy image --severity HIGH,CRITICAL --exit-code 1 --input alpinehelloworld.tar --format table --output trivy-report.json
-  allow_failure: false
   artifacts:
     paths:
       - trivy-report.json
+  allow_failure: false
+
   # rules:
   #   - changes:
   #       - Dockerfile
@@ -206,12 +213,12 @@ release image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-  # rules:
-  #     - changes:
-  #         - Dockerfile
-  #         - webapp/**/*.py
-  #         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #     - when: never
+  rules:
+      - changes:
+          - Dockerfile
+          - webapp/**/*.py
+          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+      - when: never
 
 
