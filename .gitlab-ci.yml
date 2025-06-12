@@ -90,6 +90,20 @@ scan_security:
   #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
   # - when: never
 
+# Job de test d'acceptation
+test acceptance:
+  #image: docker:latest
+  stage: Test acceptation
+  #services:
+  #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
+  #  alias: docker
+  script:
+    - docker load < alpinehelloworld.tar
+    - docker run -d -p 80:5000 -e PORT=5000 --name webapp alpinehelloworld  # Lancement du conteneur à partir de l'image "alpinehelloworld"
+    - sleep 5
+    - apk --no-cache add curl
+    - curl "http://docker" | grep -q "Hello world!"
+
   
     # Job de tests unitaires
 test_unitaires: 
