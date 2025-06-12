@@ -67,35 +67,20 @@ build:
         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
     - when: never
 
-# Job pour analyser les vulnérabilités de sécurité avec Trivy
-# scan_security:
-#   stage: Security scan
-#   image: 
-#     name: aquasec/trivy:0.29.0
-#     entrypoint: [""]
-#   script:
-#     # Utilisation de la commande docker run pour scanner l'image alpinehelloworld
-#     #- docker run --rm aquasec/trivy image alpinehelloworld --exit-code 1 --no-progress  # Lance le scan sur l'image "alpinehelloworld"
-#    - trivy image --severity HIGH,CRITICAL --exit-code 0 --input alpinehelloworld.tar --format table --output trivy-report.json #.html, .txt, .json en fonction des types de dcos souhaités :)
-#   allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
-#   artifacts:
-#     paths:
-#       - trivy-report.json
-
+#Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
   stage: Security scan
-  image:
+  image: 
     name: aquasec/trivy:0.29.0
     entrypoint: [""]
-  dependencies:
-    - build  # 🔁 Récupère les artifacts du job build
   script:
-    - ls -l  # ✅ Optionnel : pour vérifier que le fichier .tar est bien là
-    - trivy image --severity HIGH,CRITICAL --exit-code 1 --input alpinehelloworld.tar --format table --output trivy-report.json
+    # Utilisation de la commande docker run pour scanner l'image alpinehelloworld
+    #- docker run --rm aquasec/trivy image alpinehelloworld --exit-code 1 --no-progress  # Lance le scan sur l'image "alpinehelloworld"
+   - trivy image --severity HIGH,CRITICAL --exit-code 0 --input alpinehelloworld.tar --format table --output trivy-report.json #.html, .txt, .json en fonction des types de dcos souhaités :)
+  allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
   artifacts:
     paths:
       - trivy-report.json
-  allow_failure: false
 
   # rules:
   #   - changes:
