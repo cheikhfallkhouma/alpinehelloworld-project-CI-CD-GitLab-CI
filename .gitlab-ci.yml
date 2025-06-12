@@ -99,6 +99,7 @@ test_unitaires:
     - pip install --upgrade pip  # Met à jour pip pour garantir qu'il fonctionne avec les dernières versions des paquets
     - pip install -r webapp/requirements.txt  # Installe les dépendances du projet à partir du fichier requirements.txt dans le répertoire 'webapp'
     - pip install pytest  # Installe Pytest pour exécuter les tests unitaires
+    - pip install pytest coverage
   script:
     - mkdir -p webapp/tests/results  # Crée le répertoire pour les résultats des tests (si nécessaire)
     - coverage run --source=webapp -m pytest webapp/tests.py  # Exécute les tests avec 'pytest' tout en mesurant la couverture de code uniquement sur le dossier 'webapp'
