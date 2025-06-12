@@ -4,18 +4,44 @@ services:
     alias: docker
 
 stages:
-- Build image
+- Linter
+- Build image - Compilation
 - Security scan
 - Test acceptation
 - Unit testing
 - Integration testing
-- Release image
-- Linter
+- Sonar - Quality
+- Release image - Packaging
+
+
+lint_code:
+  stage: Linter
+  image: python:3.9-slim
+  before_script:
+    - apt-get update && apt-get install -y wget  # Installe wget
+    - pip install --upgrade pip
+    - pip install flake8
+  script:
+    # Lint Python en ignorant :
+    #   - E501 : lignes trop longues
+    #   - E303 : trop de lignes vides
+    # Ne fait pas échouer le job même s’il y a des erreurs
+    - flake8 --ignore=E501,E303 webapp/ || true
+
+    # Télécharger hadolint (outil de lint Dockerfile)
+    - wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+    - chmod +x /bin/hadolint
+
+    # Analyse Dockerfile avec hadolint
+    # Ne fait pas échouer le job même s’il y a des alertes
+    - hadolint Dockerfile || true
+
+  allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
 
 
 build:
   #image: docker:latest
-  stage: Build image
+  stage: Build image - Compilation
   # services:
   #   - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
   script:
@@ -137,8 +163,27 @@ test_integration:
         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
     - when: never
 
+sonarcloud_scan:
+  stage: Sonar - Quality
+  image: sonarsource/sonar-scanner-cli:latest
+  script:
+    # Lancer l’analyse SonarCloud avec les paramètres du projet
+    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_mini-projet-alpinehelloworld \
+                    -Dsonar.organization=cheikhfallkhouma \
+                    -Dsonar.sources=. \
+                    -Dsonar.host.url=$SONAR_HOST_URL \
+                    -Dsonar.login=$SONAR_TOKEN
+  cache:
+        key: "${CI_JOB_NAME}"
+        paths:
+          - .sonar/cache
+
+  # only:
+  #   - merge_requests
+  #   - main
+
 release image:
-  stage: Release image
+  stage: Release image - Packaging
   script:
     # Charger l'image Docker à partir du fichier tar
     - docker load < alpinehelloworld.tar
@@ -161,26 +206,3 @@ release image:
       - when: never
 
 
-lint_code:
-  stage: Linter
-  image: python:3.9-slim
-  before_script:
-    - apt-get update && apt-get install -y wget  # Installe wget
-    - pip install --upgrade pip
-    - pip install flake8
-  script:
-    # Lint Python en ignorant :
-    #   - E501 : lignes trop longues
-    #   - E303 : trop de lignes vides
-    # Ne fait pas échouer le job même s’il y a des erreurs
-    - flake8 --ignore=E501,E303 webapp/ || true
-
-    # Télécharger hadolint (outil de lint Dockerfile)
-    - wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
-    - chmod +x /bin/hadolint
-
-    # Analyse Dockerfile avec hadolint
-    # Ne fait pas échouer le job même s’il y a des alertes
-    - hadolint Dockerfile || true
-
-  allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
