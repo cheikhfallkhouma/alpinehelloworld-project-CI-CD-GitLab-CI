@@ -35,14 +35,13 @@ lint_code:
     # Analyse Dockerfile avec hadolint
     # Ne fait pas échouer le job même s’il y a des alertes
     - hadolint Dockerfile || true
-
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  #   - when: never
 
 
   allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
@@ -59,14 +58,13 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
-
-  rules:
-  - changes:
-      - Dockerfile
-      - webapp/**/*.py
-      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  - when: never
+  # rules:
+  # - changes:
+  #     - Dockerfile
+  #     - webapp/**/*.py
+  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  # - when: never
 
 
 #Job pour analyser les vulnérabilités de sécurité avec Trivy
@@ -84,13 +82,13 @@ scan_security:
     paths:
       - trivy-report.json
   
-  rules:
-  - changes:
-      - Dockerfile
-      - webapp/**/*.py
-      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  - when: never
+  # rules:
+  # - changes:
+  #     - Dockerfile
+  #     - webapp/**/*.py
+  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  # - when: never
 
   
     # Job de tests unitaires
@@ -103,6 +101,8 @@ test_unitaires:
     - pip install pytest  # Installe Pytest pour exécuter les tests unitaires
   script:
     - mkdir -p webapp/tests/results  # Crée le répertoire pour les résultats des tests (si nécessaire)
+    - coverage run --source=webapp -m pytest webapp/tests.py  # Exécute les tests avec 'pytest' tout en mesurant la couverture de code uniquement sur le dossier 'webapp'
+    - coverage xml -o webapp/tests/results/coverage.xml       # Génère un rapport de couverture au format XML, nécessaire pour SonarCloud ou d'autres outils d'analyse
     - pytest webapp/tests.py --junitxml=webapp/tests/results/report.xml  # Exécute les tests dans le fichier 'tests.py' et génère un rapport XML
   artifacts:
     paths:
@@ -110,13 +110,13 @@ test_unitaires:
     when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
 
   allow_failure: false  # Si les tests échouent, le pipeline échoue
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  #   - when: never
 
 test_integration:
   stage: Integration testing
@@ -135,20 +135,20 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  #   - when: never
 
 sonarcloud_scan:
   stage: Sonar - Quality
   image: sonarsource/sonar-scanner-cli:latest
   script:
     # Lancer l’analyse SonarCloud avec les paramètres du projet
-    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_alpinehelloworld-project -Dsonar.organization=alpinehelloworld-project -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=${SONAR_TOKEN}
+    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_alpinehelloworld-project -Dsonar.organization=alpinehelloworld-project -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.python.coverage.reportPaths=webapp/tests/results/coverage.xml -Dsonar.login=${SONAR_TOKEN}
   cache:
         key: "${CI_JOB_NAME}"
         paths:
@@ -173,12 +173,12 @@ release image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-  rules:
-      - changes:
-          - Dockerfile
-          - webapp/**/*.py
-          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-      - when: never
+  # rules:
+  #     - changes:
+  #         - Dockerfile
+  #         - webapp/**/*.py
+  #         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  #     - when: never
 
 
