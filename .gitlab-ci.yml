@@ -36,13 +36,13 @@ lint_code:
     # Ne fait pas échouer le job même s’il y a des alertes
     - hadolint Dockerfile || true
 
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 
   allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
@@ -60,6 +60,14 @@ build:
     paths: 
       - alpinehelloworld.tar
 
+  rules:
+  - changes:
+      - Dockerfile
+      - webapp/**/*.py
+      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  - when: never
+
 
 #Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
@@ -75,79 +83,16 @@ scan_security:
   artifacts:
     paths:
       - trivy-report.json
-
-
-# build:
-#   image: docker:latest
-#   stage: Build image - Compilation
-#   services:
-#     - name: docker:dind
-#       alias: docker
-#   variables:
-#     DOCKER_HOST: tcp://docker:2375/
-#     DOCKER_TLS_CERTDIR: ""
-#   script:
-#     - docker build -t alpinehelloworld .
-#     - docker save alpinehelloworld -o alpinehelloworld.tar
-#   artifacts:
-#     paths:
-#       - alpinehelloworld.tar
-
-
-# scan_security:
-#   stage: Security scan
-#   image:
-#     name: aquasec/trivy:0.29.0
-#     entrypoint: [""]
-#   services:
-#     - name: docker:dind
-#       alias: docker
-#   variables:
-#     DOCKER_HOST: tcp://docker:2375/
-#     DOCKER_TLS_CERTDIR: ""
-#   dependencies:
-#     - build
-#   script:
-#     - ls -l
-#     - docker load < alpinehelloworld.tar
-#     - trivy image --severity HIGH,CRITICAL --exit-code 1 --format table --output trivy-report.json alpinehelloworld
-#   artifacts:
-#     paths:
-#       - trivy-report.json
-#   allow_failure: false
-
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
-
-# Job de test d'acceptation
-test acceptance:
-  #image: docker:latest
-  stage: Test acceptation
-  #services:
-  #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
-  #  alias: docker
-  script:
-    - docker load < alpinehelloworld.tar
-    - docker run -d -p 80:5000 -e PORT=5000 --name webapp alpinehelloworld  # Lancement du conteneur à partir de l'image "alpinehelloworld"
-    - sleep 5
-    - apk --no-cache add curl
-    - curl "http://docker" | grep -q "Hello world!"
- 
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
+  
+  rules:
+  - changes:
+      - Dockerfile
+      - webapp/**/*.py
+      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  - when: never
 
   
-
     # Job de tests unitaires
 test_unitaires: 
   stage: Unit testing  
@@ -165,13 +110,13 @@ test_unitaires:
     when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
 
   allow_failure: false  # Si les tests échouent, le pipeline échoue
-  # rules:
-  #     - changes:
-  #         - Dockerfile
-  #         - webapp/**/*.py
-  #         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #     - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 test_integration:
   stage: Integration testing
@@ -190,24 +135,20 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 sonarcloud_scan:
   stage: Sonar - Quality
   image: sonarsource/sonar-scanner-cli:latest
   script:
     # Lancer l’analyse SonarCloud avec les paramètres du projet
-    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_alpinehelloworld-project \ 
-                    -Dsonar.organization=alpinehelloworld-project \
-                    -Dsonar.sources=. \
-                    -Dsonar.host.url=https://sonarcloud.io \
-                    -Dsonar.login=${SONAR_TOKEN}
+    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_alpinehelloworld-project Dsonar.organization=alpinehelloworld-project -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io Dsonar.login=${SONAR_TOKEN}
   cache:
         key: "${CI_JOB_NAME}"
         paths:
@@ -232,12 +173,12 @@ release image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-  # rules:
-  #     - changes:
-  #         - Dockerfile
-  #         - webapp/**/*.py
-  #         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #     - when: never
+  rules:
+      - changes:
+          - Dockerfile
+          - webapp/**/*.py
+          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+      - when: never
 
 
