@@ -98,13 +98,7 @@ build:
   artifacts:
     paths:
       - alpinehelloworld.tar
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py
-        - path/to/other/files/**
-    - when: never
+
 
 scan_security:
   stage: Security scan
