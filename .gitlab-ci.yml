@@ -48,39 +48,85 @@ lint_code:
   allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
 
 
+# build:
+#   #image: docker:latest
+#   stage: Build image - Compilation
+#   # services:
+#   #   - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
+#   script:
+#     - docker build -t alpinehelloworld .  # Construction de l'image avec le tag "alpinehelloworld"
+#     - docker save alpinehelloworld > alpinehelloworld.tar
+#   artifacts:
+#     paths: 
+#       - alpinehelloworld.tar
+#   rules:
+#     - changes:
+#         - Dockerfile
+#         - webapp/**/*.py
+#         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+#         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+#     - when: never
+
+# #Job pour analyser les vulnérabilités de sécurité avec Trivy
+# scan_security:
+#   stage: Security scan
+#   image: 
+#     name: aquasec/trivy:0.29.0
+#     entrypoint: [""]
+#   script:
+#     # Utilisation de la commande docker run pour scanner l'image alpinehelloworld
+#     #- docker run --rm aquasec/trivy image alpinehelloworld --exit-code 1 --no-progress  # Lance le scan sur l'image "alpinehelloworld"
+#    - trivy image --severity HIGH,CRITICAL --exit-code 0 --input alpinehelloworld.tar --format table --output trivy-report.json #.html, .txt, .json en fonction des types de dcos souhaités :)
+#   allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
+#   artifacts:
+#     paths:
+#       - trivy-report.json
+
+
 build:
-  #image: docker:latest
+  image: docker:latest
   stage: Build image - Compilation
-  # services:
-  #   - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
+  services:
+    - name: docker:dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""
   script:
-    - docker build -t alpinehelloworld .  # Construction de l'image avec le tag "alpinehelloworld"
-    - docker save alpinehelloworld > alpinehelloworld.tar
+    - docker build -t alpinehelloworld .
+    - docker save alpinehelloworld -o alpinehelloworld.tar
   artifacts:
-    paths: 
+    paths:
       - alpinehelloworld.tar
   rules:
     - changes:
         - Dockerfile
         - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+        - scripts/**/*.py
+        - path/to/other/files/**
     - when: never
 
-#Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
   stage: Security scan
-  image: 
+  image:
     name: aquasec/trivy:0.29.0
     entrypoint: [""]
+  services:
+    - name: docker:dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_TLS_CERTDIR: ""
+  dependencies:
+    - build
   script:
-    # Utilisation de la commande docker run pour scanner l'image alpinehelloworld
-    #- docker run --rm aquasec/trivy image alpinehelloworld --exit-code 1 --no-progress  # Lance le scan sur l'image "alpinehelloworld"
-   - trivy image --severity HIGH,CRITICAL --exit-code 0 --input alpinehelloworld.tar --format table --output trivy-report.json #.html, .txt, .json en fonction des types de dcos souhaités :)
-  allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
+    - ls -l
+    - docker load < alpinehelloworld.tar
+    - trivy image --severity HIGH,CRITICAL --exit-code 1 --format table --output trivy-report.json alpinehelloworld
   artifacts:
     paths:
       - trivy-report.json
+  allow_failure: false
 
   # rules:
   #   - changes:
