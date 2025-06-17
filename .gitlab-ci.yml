@@ -217,8 +217,8 @@ release image:
 provision_IaC_EC2_review_and_deploy_review_environment:
   stage: IaC EC2 and deploy review environment
   environment:
-    # name: review/$CI_COMMIT_REF_NAME
-    name: review-environment
+    name: review/$CI_COMMIT_REF_NAME
+    #name: review-environment
     url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
     on_stop: stop_review
 
