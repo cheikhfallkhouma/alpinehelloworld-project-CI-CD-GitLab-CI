@@ -13,6 +13,7 @@ stages:
 - Sonar - Quality
 - Release image - Packaging
 - IaC EC2 and deploy review environment
+- cleanup review environment
 
 
 lint_code:
@@ -353,7 +354,7 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -C "$command1 && $command2 && $command3 && $command4"
 
 stop_review:
-  stage: cleanup
+  stage: cleanup review environment
   script:
     - chmod +x scripts/destroy-ec2-review.sh
     - TAG="review_${CI_COMMIT_REF_SLUG}" ./scripts/destroy-ec2-review.sh
