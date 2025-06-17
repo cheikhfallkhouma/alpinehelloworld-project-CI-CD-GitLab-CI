@@ -7,11 +7,12 @@ stages:
 - Linter
 - Build image - Compilation
 - Security scan
-- Test acceptation
+- Acceptance Test
 - Unit testing
 - Integration testing
 - Sonar - Quality
 - Release image - Packaging
+- IaC EC2 and deploy review environment
 
 
 lint_code:
@@ -81,7 +82,6 @@ scan_security:
   artifacts:
     paths:
       - trivy-report.json
-  
   # rules:
   # - changes:
   #     - Dockerfile
@@ -93,7 +93,7 @@ scan_security:
 # Job de test d'acceptation
 test acceptance:
   #image: docker:latest
-  stage: Test acceptation
+  stage: Acceptance Test
   #services:
   #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
   #  alias: docker
@@ -103,8 +103,14 @@ test acceptance:
     - sleep 5
     - apk --no-cache add curl
     - curl "http://docker" | grep -q "Hello world!"
+  # rules:
+  # - changes:
+  #     - Dockerfile
+  #     - webapp/**/*.py
+  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  # - when: never
 
-  
     # Job de tests unitaires
 test_unitaires: 
   stage: Unit testing  
@@ -172,6 +178,14 @@ sonarcloud_scan:
   # only:
   #   - merge_requests
   #   - main
+  # rules:
+  # - changes:
+  #     - Dockerfile
+  #     - webapp/**/*.py
+  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  # - when: never
+
 
 release image:
   stage: Release image - Packaging
@@ -197,3 +211,155 @@ release image:
   #     - when: never
 
 
+
+
+# Job de provisionnement de l'instance EC2 pour l'environnement review
+provision_IaC_EC2_review_and_deploy_review_environment:
+  stage: IaC EC2 and deploy review environment
+  environment:
+    # name: review/$CI_COMMIT_REF_NAME
+    name: review-environment
+    url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
+    on_stop: stop_review
+
+  rules:
+    - if: '$CI_COMMIT_REF_NAME != "main"'
+      when: always
+
+  script:
+    - export INIT_PATH=$(pwd)
+
+    # Installer Python et pip avec apk
+    - apk add --no-cache python3 py3-pip  
+
+    # Créer et activer l'environnement virtuel
+    - python3 -m venv /tmp/venv
+    - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+
+    # Installer awscli
+    - pip install awscli  
+
+    # Configurer AWS CLI avec les variables GitLab
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_DEFAULT_REGION
+
+    - export TAG="review_env"
+
+    # Vérifier si une instance existe déjà
+    - |
+      INSTANCE_ID=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].InstanceId" \
+        --output text)
+      
+    - |
+      if [ -n "$INSTANCE_ID" ]; then
+        echo "An instance with the tag '$TAG' already exists: $INSTANCE_ID"
+      else
+        echo "No instance found. Creating a new EC2 instance."
+
+        # Vérifier que la variable ID_AMI_UBUNTU est définie avant de créer l'instance
+        if [ -z "$ID_AMI_UBUNTU" ]; then
+          echo "AMI_ID is not set! Exiting..."
+          exit 1
+        fi
+
+        # Vérifier que la variable INSTANCE_TYPE est définie avant de créer l'instance
+        if [ -z "$INSTANCE_TYPE" ]; then
+          echo "INSTANCE_TYPE is not set! Exiting..."
+          exit 1
+        fi
+
+        # Créer une nouvelle instance EC2
+        USER_DATA="#!/bin/bash
+        curl -fsSL https://get.docker.com -o install-docker.sh
+        sh install-docker.sh --dry-run
+        sudo sh install-docker.sh
+        sudo usermod -aG docker ubuntu"
+
+        # Créer l'instance avec les informations fournies
+        aws ec2 run-instances \
+          --image-id $ID_AMI_UBUNTU \
+          --count 1 \
+          --instance-type $INSTANCE_TYPE \
+          --key-name ssh-key \
+          --security-group-ids $ID_SECURITY_GROUP \
+          --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=$STORAGE,DeleteOnTermination=true}" \
+          --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value='$TAG'}]' \
+          --user-data "$USER_DATA"
+
+        # Attendre 30 secondes
+        sleep 30
+        echo "EC2 instance created with tag '$TAG'."
+      fi
+
+    # Récupérer l'adresse IP publique de l'instance
+    - |
+      PUBLIC_IP_REVIEW=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].PublicIpAddress" \
+        --output text)
+
+    - |
+      if [ -z "$PUBLIC_IP_REVIEW" ]; then
+        echo "No instance found with the tag '$TAG' or the instance is not running."
+        exit 1
+      else
+        echo "Instance public IP is $PUBLIC_IP_REVIEW"
+      fi
+
+    # Exporter l'adresse IP pour les étapes suivantes
+    - export HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$PUBLIC_IP_REVIEW
+    - echo "Instance's public IP is $HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2"
+
+    # Sauvegarder dans un fichier d'environnement
+    - cd $INIT_PATH
+    - echo "HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" >> deploy.env
+    
+ # Installation du client SSH pour la connexion à l'instance EC2
+    - apk add openssh-client
+    # Démarrage de l'agent SSH pour la gestion de la clé privée
+    - eval $(ssh-agent -s)
+    # Création du dossier .ssh avec permissions sécurisées
+    - mkdir -p ~/.ssh
+    # Application des permissions pour sécuriser les fichiers SSH
+    - chmod -R 400 ~/.ssh
+    # Création d'un fichier known_hosts pour éviter les alertes SSH
+    - touch ~/.ssh/known_hosts
+    # Accès au dossier SSH
+    - cd ~/.ssh
+    # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
+    - echo "${SSH_KEY}" > id_rsa
+     # Application de permissions sécurisées à la clé privée
+    - chmod 0400 id_rsa
+    # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
+    - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} >> ~/.ssh/known_hosts
+    - command1="docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
+    # Télécharge l'image Docker spécifique à la branche actuelle
+    - command2="docker pull $IMAGE_NAME:$CI_COMMIT_REF_NAME"
+    # Supprime l'ancien conteneur s'il existe
+    - command3="docker rm -f webapp" 
+    # Démarre un nouveau conteneur avec l'image mise à jour
+    - command4="docker run -d -p 80:5000 -e PORT=5000 --name webapp $IMAGE_NAME:$CI_COMMIT_REF_NAME"
+
+    # Connexion SSH à l'instance EC2 et exécution des commandes Docker définies
+    - ssh -t ${SSH_USER}@${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} 
+      -o SendEnv=IMAGE_NAME 
+      -o SendEnv=CI_COMMIT_REF_NAME 
+      -o SendEnv=CI_REGISTRY_USER 
+      -o SendEnv=CI_REGISTRY_PASSWORD 
+      -o SendEnv=CI_REGISTRY 
+      -C "$command1 && $command2 && $command3 && $command4"
+
+stop_review:
+  stage: cleanup
+  script:
+    - chmod +x scripts/destroy-ec2-review.sh
+    - TAG="review_${CI_COMMIT_REF_SLUG}" ./scripts/destroy-ec2-review.sh
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  rules:
+    - if: '$CI_COMMIT_REF_NAME != "main"'
+      when: manual
