@@ -358,6 +358,8 @@ provision_IaC_EC2_review_and_deploy_review_environment:
 stop_review:
   stage: cleanup review environment
   script:
+    - "echo \"🧼 Cleanup de l'environnement de revue : $CI_COMMIT_REF_NAME\""
+    - test -f scripts/destroy-ec2-review.sh || { echo "❌ Script introuvable !"; exit 1; }
     - chmod +x scripts/destroy-ec2-review.sh
     - TAG="review_${CI_COMMIT_REF_SLUG}" ./scripts/destroy-ec2-review.sh
   environment:
@@ -366,3 +368,5 @@ stop_review:
   rules:
     - if: '$CI_COMMIT_REF_NAME != "main"'
       when: manual
+
+
