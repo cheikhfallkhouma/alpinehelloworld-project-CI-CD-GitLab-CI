@@ -360,7 +360,6 @@ stop_review:
   stage: cleanup review environment
   script:
     - ls -l destroy-ec2-review.sh
-    - file destroy-ec2-review.sh
     - head -1 destroy-ec2-review.sh
     - chmod +x destroy-ec2-review.sh
     - "echo \"🧼 Cleanup de l'environnement de revue : $CI_COMMIT_REF_NAME\""
