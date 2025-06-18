@@ -1,4 +1,3 @@
-git checkout main
 image: docker:latest
 services:
   - name : docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
