@@ -227,12 +227,12 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     - if: '$CI_COMMIT_REF_NAME != "main"'
       when: always
 
-    - changes:
-          - Dockerfile
-          - webapp/**/*.py
-          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
+    # - changes:
+    #       - Dockerfile
+    #       - webapp/**/*.py
+    #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+    #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    # - when: never
 
   script:
     - export INIT_PATH=$(pwd)
@@ -369,6 +369,7 @@ stop_review:
   services:
     - docker:dind
   script:
+    - apk add --no-cache bash   # installe bash dans l’image alpine
     - ls -l destroy-ec2-review.sh
     - head -1 destroy-ec2-review.sh
     - chmod +x destroy-ec2-review.sh
