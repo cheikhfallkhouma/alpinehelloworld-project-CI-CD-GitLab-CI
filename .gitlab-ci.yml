@@ -398,6 +398,7 @@ test_review_environment:
 
 
 remove_review_environment:
+  <<: *rules_webapp_changes
   stage: Remove review environment
   environment:
     name: review/$CI_COMMIT_REF_NAME
