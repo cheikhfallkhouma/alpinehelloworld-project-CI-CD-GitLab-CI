@@ -10,18 +10,21 @@ stages:
 - Acceptance Test
 - Unit testing
 - Integration testing
-- Sonar - Quality
+- Sonar quality
 - Release image - Packaging
 - IaC EC2 and deploy review environment
 - Test review environment
 - Remove review environment
 - IaC EC2 and deploy staging environment
+- cleanup
+
 
 .rules_webapp_changes: &rules_webapp_changes
   rules:
     - changes:
         - Dockerfile
         - webapp/**/*.py
+      when: always
     - when: never
 
 
@@ -393,6 +396,7 @@ test_review_environment:
 #   when: manual
 #   script:
 
+
 remove_review_environment:
   stage: Remove review environment
   environment:
@@ -445,6 +449,7 @@ remove_review_environment:
   # rules:
   #   - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_STATE == "merged"'
   #     when: always
+  
 
 
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
@@ -588,3 +593,14 @@ provision_IaC_EC2_staging:
       - deploy.env  # Enregistrer l'adresse IP dans un fichier d'environnement
     expire_in: 1 week  # Optionnel, durée de conservation de l'artefact
 
+
+
+cleanup_docker:
+  stage: cleanup
+  script:
+    - docker container prune -f
+    - docker image prune -af
+    - docker volume prune -f
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
