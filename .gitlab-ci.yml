@@ -96,6 +96,12 @@ scan_security:
   artifacts:
     paths:
       - trivy-report.json
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never  
 
 # Job de test d'acceptation
 test_acceptance:
@@ -165,12 +171,12 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
-  # rules:
-  #     - changes:
-  #         - Dockerfile
-  #         - webapp/**/*.py
-  #       when: always
-  #     - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
 
 
 sonarcloud_scan:
