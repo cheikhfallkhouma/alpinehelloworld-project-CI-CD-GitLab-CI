@@ -165,12 +165,12 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
-  rules:
-      - changes:
-          - Dockerfile
-          - webapp/**/*.py
-        when: always
-      - when: never
+  # rules:
+  #     - changes:
+  #         - Dockerfile
+  #         - webapp/**/*.py
+  #       when: always
+  #     - when: never
 
 
 sonarcloud_scan:
@@ -184,12 +184,12 @@ sonarcloud_scan:
         key: "${CI_JOB_NAME}"
         paths:
           - .sonar/cache
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-      when: always
-    - when: never
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
 
 
   # only:
@@ -444,12 +444,12 @@ test_review_environment:
 #     action: stop
 #   when: manual
 #   script:
-  rules:
-      - changes:
-          - Dockerfile
-          - webapp/**/*.py
-        when: always
-      - when: never
+  # rules:
+  #     - changes:
+  #         - Dockerfile
+  #         - webapp/**/*.py
+  #       when: always
+  #     - when: never
 
 
 remove_review_environment:
