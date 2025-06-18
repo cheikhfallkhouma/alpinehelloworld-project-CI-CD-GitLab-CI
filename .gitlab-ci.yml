@@ -227,6 +227,13 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     - if: '$CI_COMMIT_REF_NAME != "main"'
       when: always
 
+    - changes:
+          - Dockerfile
+          - webapp/**/*.py
+          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
+
   script:
     - export INIT_PATH=$(pwd)
 
@@ -358,6 +365,9 @@ provision_IaC_EC2_review_and_deploy_review_environment:
 
 stop_review:
   stage: cleanup review environment
+  image: docker:latest
+  services:
+    - docker:dind
   script:
     - ls -l destroy-ec2-review.sh
     - head -1 destroy-ec2-review.sh
