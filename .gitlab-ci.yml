@@ -355,6 +355,7 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
 
+
 stop_review:
   stage: cleanup review environment
   script:
@@ -368,5 +369,5 @@ stop_review:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
   rules:
-    - if: '$CI_COMMIT_REF_NAME != \"main\"'
+    - if: '$CI_COMMIT_REF_NAME != "main"'
       when: manual
