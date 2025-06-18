@@ -363,13 +363,16 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -o SendEnv=CI_REGISTRY_PASSWORD 
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
+  artifacts:
+    reports:
+      dotenv: deploy.env
 
 
 # Test de l'environnement review
 test review environment:
   stage: Test review environment
   environment:
-    name: review-environment
+    name: review/$CI_COMMIT_REF_NAME
     url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
   script:
 
@@ -463,6 +466,10 @@ remove review environment :
       else
         echo "Aucune instance avec le tag '$TAG' à supprimer."
       fi
+  # rules:
+  #   - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_STATE == "merged"'
+  #     when: always
+
 
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
 provision_IaC_EC2_staging:
