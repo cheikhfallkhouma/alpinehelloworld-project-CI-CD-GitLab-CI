@@ -87,7 +87,7 @@ scan_security:
 test_acceptance:
   #image: docker:latest
   #<<: *rules_webapp_changes
-  stage: Acceptance test
+  stage: Acceptance Test
   #services:
   #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
   #  alias: docker
