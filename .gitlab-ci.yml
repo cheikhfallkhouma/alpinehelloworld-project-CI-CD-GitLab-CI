@@ -1,10 +1,684 @@
+git checkout main
 image: docker:latest
 services:
   - name : docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
     alias: docker
 
 stages:
-- Build image
+- Linter
+- Build image - Compilation
 - Security scan
-- Test acceptation
+- Acceptance Test
+- Unit testing
+- Integration testing
+- Sonar quality
+- Release image - Packaging
+- IaC EC2 and deploy review environment
+- Test review environment
+- Remove review environment
+- IaC EC2 and deploy staging environment
+- cleanup
 
+
+# .rules_webapp_changes: &rules_webapp_changes
+#   rules:
+#     - changes:
+#         - Dockerfile
+#         - webapp/**/*.py
+#       when: always
+#     - when: never
+
+
+
+lint_code:
+ # <<: *rules_webapp_changes
+  stage: Linter
+  image: python:3.9-slim
+  before_script:
+    - apt-get update && apt-get install -y wget  # Installe wget
+    - pip install --upgrade pip
+    - pip install flake8
+  script:
+    # Lint Python en ignorant :
+    #   - E501 : lignes trop longues
+    #   - E303 : trop de lignes vides
+    # Ne fait pas échouer le job même s’il y a des erreurs
+    - flake8 --ignore=E501,E303 webapp/ || true
+
+    # Télécharger hadolint (outil de lint Dockerfile)
+    - wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+    - chmod +x /bin/hadolint
+
+    # Analyse Dockerfile avec hadolint
+    # Ne fait pas échouer le job même s’il y a des alertes
+    - hadolint Dockerfile || true
+  allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
+
+build:
+  #image: docker:latest
+ # <<: *rules_webapp_changes
+  stage: Build image - Compilation
+  # services:
+  #   - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
+  script:
+    - docker build -t alpinehelloworld .  # Construction de l'image avec le tag "alpinehelloworld"
+    - docker save alpinehelloworld > alpinehelloworld.tar
+  artifacts:
+    paths: 
+      - alpinehelloworld.tar
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
+
+
+#Job pour analyser les vulnérabilités de sécurité avec Trivy
+scan_security:
+ # <<: *rules_webapp_changes
+  stage: Security scan
+  image: 
+    name: aquasec/trivy:0.29.0
+    entrypoint: [""]
+  script:
+    # Utilisation de la commande docker run pour scanner l'image alpinehelloworld
+    #- docker run --rm aquasec/trivy image alpinehelloworld --exit-code 1 --no-progress  # Lance le scan sur l'image "alpinehelloworld"
+   - trivy image --severity HIGH,CRITICAL --exit-code 0 --input alpinehelloworld.tar --format table --output trivy-report.json #.html, .txt, .json en fonction des types de dcos souhaités :)
+  allow_failure: false  # Fait échouer le pipeline si des vulnérabilités sont trouvées
+  artifacts:
+    paths:
+      - trivy-report.json
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never  
+
+# Job de test d'acceptation
+test_acceptance:
+  #image: docker:latest
+  #<<: *rules_webapp_changes
+  stage: Acceptance Test
+  #services:
+  #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
+  #  alias: docker
+  script:
+    - docker load < alpinehelloworld.tar
+    - docker run -d -p 80:5000 -e PORT=5000 --name webapp alpinehelloworld  # Lancement du conteneur à partir de l'image "alpinehelloworld"
+    - sleep 5
+    - apk --no-cache add curl
+    - curl "http://docker" | grep -q "Hello world!"
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
+
+# Job de tests unitaires
+test_unitaires: 
+ # <<: *rules_webapp_changes
+  stage: Unit testing  
+  image: python:3.9-slim  # Utilisation de l'image Docker Python 3.9 allégée
+  before_script:
+    - pip install --upgrade pip  # Met à jour pip pour garantir qu'il fonctionne avec les dernières versions des paquets
+    - pip install -r webapp/requirements.txt  # Installe les dépendances du projet à partir du fichier requirements.txt dans le répertoire 'webapp'
+    - pip install pytest  # Installe Pytest pour exécuter les tests unitaires
+    - pip install pytest coverage
+  script:
+    - mkdir -p webapp/tests/results  # Crée le répertoire pour les résultats des tests (si nécessaire)
+    - coverage run --source=webapp -m pytest webapp/tests.py  # Exécute les tests avec 'pytest' tout en mesurant la couverture de code uniquement sur le dossier 'webapp'
+    - coverage xml -o webapp/tests/results/coverage.xml       # Génère un rapport de couverture au format XML, nécessaire pour SonarCloud ou d'autres outils d'analyse
+    - pytest webapp/tests.py --junitxml=webapp/tests/results/report.xml  # Exécute les tests dans le fichier 'tests.py' et génère un rapport XML
+  artifacts:
+    paths:
+      - webapp/tests/results  # Sauvegarde le répertoire contenant les résultats des tests pour qu'il soit accessible dans GitLab CI
+    when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
+  allow_failure: false  # Si les tests échouent, le pipeline échoue
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
+
+test_integration:
+  # <<: *rules_webapp_changes
+  stage: Integration testing
+  image: python:3.9-slim
+  before_script:
+    - pip install --upgrade pip
+    - pip install --root-user-action=ignore -r webapp/requirements.txt
+    - pip install pytest
+    - export PYTHONPATH=$PYTHONPATH:$(pwd)
+    # Démarrer le serveur ou base de test si nécessaire
+  script:
+    - mkdir -p webapp/tests/results
+    - pytest webapp/tests/integration/ --junitxml=webapp/tests/results/integration_report.xml
+  artifacts:
+    paths:
+      - webapp/tests/results
+    when: always
+  allow_failure: false
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
+
+sonarcloud_scan:
+  # <<: *rules_webapp_changes
+  stage: Sonar quality
+  image: sonarsource/sonar-scanner-cli:latest
+  script:
+    # Lancer l’analyse SonarCloud avec les paramètres du projet
+    - sonar-scanner -Dsonar.projectKey=cheikhfallkhouma_alpinehelloworld-project -Dsonar.organization=alpinehelloworld-project -Dsonar.sources=. -Dsonar.host.url=https://sonarcloud.io -Dsonar.python.coverage.reportPaths=webapp/tests/results/coverage.xml -Dsonar.login=${SONAR_TOKEN}
+  cache:
+        key: "${CI_JOB_NAME}"
+        paths:
+          - .sonar/cache
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
+
+  # only:
+  #   - merge_requests
+  #   - main
+
+release_image:
+  # <<: *rules_webapp_changes
+  stage: Release image - Packaging
+  script:
+    # Charger l'image Docker à partir du fichier tar
+    - docker load < alpinehelloworld.tar
+    # Taguer l'image Docker avec le nom de l'image et la révision du commit
+    - docker tag alpinehelloworld "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
+    # Taguer l'image Docker avec le nom de l'image et le short SHA du commit
+    - docker tag alpinehelloworld "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+    # Se connecter au registre Docker avec les identifiants spécifiés dans les variables d'environnement
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    # Pousser l'image Docker avec le tag basé sur le nom de la branche (révision du commit)
+    - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
+    # Pousser l'image Docker avec le tag basé sur le short SHA du commit
+    - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
+
+.setup_python_aws: &setup_python_aws
+  # Installer Python et pip avec apk
+  - apk add --no-cache python3 py3-pip
+  # Créer et activer l'environnement virtuel
+  - python3 -m venv /tmp/venv
+  # Activer l'environnement virtuel
+  - source /tmp/venv/bin/activate
+  # Installer awscli
+  - pip install awscli
+  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+  - aws configure set region $AWS_DEFAULT_REGION
+
+.setup_ssh: &setup_ssh
+  - apk add openssh-client
+  - eval $(ssh-agent -s)
+  - mkdir -p ~/.ssh
+  - chmod -R 400 ~/.ssh
+  - touch ~/.ssh/known_hosts
+  - cd ~/.ssh
+  - echo "${SSH_KEY}" > id_rsa
+  - chmod 0400 id_rsa
+  - ssh-add id_rsa
+
+
+# Job de provisionnement de l'instance EC2 pour l'environnement review
+provision_IaC_EC2_review_and_deploy_review_environment:
+ # <<: *rules_webapp_changes
+  stage: IaC EC2 and deploy review environment
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    #name: review-environment
+    url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
+    #on_stop: stop_review
+
+  script:
+    - export INIT_PATH=$(pwd)
+
+    - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
+    
+    # - apk add --no-cache python3 py3-pip      
+    # - python3 -m venv /tmp/venv
+    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+
+    # # Installer awscli
+    # - pip install awscli  
+
+    # # Configurer AWS CLI avec les variables GitLab
+    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    # - aws configure set region $AWS_DEFAULT_REGION
+
+    - export TAG="review_env"
+
+    # Vérifier si une instance existe déjà
+    - |
+      INSTANCE_ID=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].InstanceId" \
+        --output text)
+      
+    - |
+      if [ -n "$INSTANCE_ID" ]; then
+        echo "An instance with the tag '$TAG' already exists: $INSTANCE_ID"
+      else
+        echo "No instance found. Creating a new EC2 instance."
+
+        # Vérifier que la variable ID_AMI_UBUNTU est définie avant de créer l'instance
+        if [ -z "$ID_AMI_UBUNTU" ]; then
+          echo "AMI_ID is not set! Exiting..."
+          exit 1
+        fi
+
+        # Vérifier que la variable INSTANCE_TYPE est définie avant de créer l'instance
+        if [ -z "$INSTANCE_TYPE" ]; then
+          echo "INSTANCE_TYPE is not set! Exiting..."
+          exit 1
+        fi
+
+        # Créer une nouvelle instance EC2
+        USER_DATA="#!/bin/bash
+        curl -fsSL https://get.docker.com -o install-docker.sh
+        sh install-docker.sh --dry-run
+        sudo sh install-docker.sh
+        sudo usermod -aG docker ubuntu"
+
+        # Créer l'instance avec les informations fournies
+        aws ec2 run-instances \
+          --image-id $ID_AMI_UBUNTU \
+          --count 1 \
+          --instance-type $INSTANCE_TYPE \
+          --key-name ssh-key \
+          --security-group-ids $ID_SECURITY_GROUP \
+          --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=$STORAGE,DeleteOnTermination=true}" \
+          --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value='$TAG'}]' \
+          --user-data "$USER_DATA"
+
+        # Attendre 30 secondes
+        sleep 30
+        echo "EC2 instance created with tag '$TAG'."
+      fi
+
+    # Récupérer l'adresse IP publique de l'instance
+    - |
+      PUBLIC_IP_REVIEW=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].PublicIpAddress" \
+        --output text)
+
+    - |
+      if [ -z "$PUBLIC_IP_REVIEW" ]; then
+        echo "No instance found with the tag '$TAG' or the instance is not running."
+        exit 1
+      else
+        echo "Instance public IP is $PUBLIC_IP_REVIEW"
+      fi
+
+    # Exporter l'adresse IP pour les étapes suivantes
+    - export HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$PUBLIC_IP_REVIEW
+    - echo "Instance's public IP is $HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2"
+
+    # Sauvegarder dans un fichier d'environnement
+    - cd $INIT_PATH
+    - echo "HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" >> deploy.env
+    
+ # Installation du client SSH pour la connexion à l'instance EC2
+    # - apk add openssh-client
+    # # Démarrage de l'agent SSH pour la gestion de la clé privée
+    # - eval $(ssh-agent -s)
+    # # Création du dossier .ssh avec permissions sécurisées
+    # - mkdir -p ~/.ssh
+    # # Application des permissions pour sécuriser les fichiers SSH
+    # - chmod -R 400 ~/.ssh
+    # # Création d'un fichier known_hosts pour éviter les alertes SSH
+    # - touch ~/.ssh/known_hosts
+    # # Accès au dossier SSH
+    # - cd ~/.ssh
+    # # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
+    # - echo "${SSH_KEY}" > id_rsa
+    #  # Application de permissions sécurisées à la clé privée
+    # - chmod 0400 id_rsa
+    # # Ajout de la clé privée à l'agent SSH
+    # - ssh-add id_rsa  
+    - *setup_ssh  # Utilisation de l'ancre pour configurer SSH
+    # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
+    - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} >> ~/.ssh/known_hosts
+    - command1="docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
+    # Télécharge l'image Docker spécifique à la branche actuelle
+    - command2="docker pull $IMAGE_NAME:$CI_COMMIT_REF_NAME"
+    # Supprime l'ancien conteneur s'il existe
+    - command3="docker rm -f webapp" 
+    # Démarre un nouveau conteneur avec l'image mise à jour
+    - command4="docker run -d -p 80:5000 -e PORT=5000 --name webapp $IMAGE_NAME:$CI_COMMIT_REF_NAME"
+
+    # Connexion SSH à l'instance EC2 et exécution des commandes Docker définies
+    - ssh -t ${SSH_USER}@${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} 
+      -o SendEnv=IMAGE_NAME 
+      -o SendEnv=CI_COMMIT_REF_NAME 
+      -o SendEnv=CI_REGISTRY_USER 
+      -o SendEnv=CI_REGISTRY_PASSWORD 
+      -o SendEnv=CI_REGISTRY 
+      -C "$command1 && $command2 && $command3 && $command4"
+  # artifacts:
+  #   reports:
+  #     dotenv: deploy.env
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
+
+
+# Test de l'environnement review
+test_review_environment:
+ # <<: *rules_webapp_changes
+  stage: Test review environment
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
+  script:
+    - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
+
+    # # Installer Python et pip avec apk
+    # - apk add --no-cache python3 py3-pip  
+
+    # # Créer et activer l'environnement virtuel
+    # - python3 -m venv /tmp/venv
+    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+
+    # # Installer awscli
+    # - pip install awscli  
+
+    # # Configurer AWS CLI avec les variables GitLab
+    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    # - aws configure set region $AWS_DEFAULT_REGION
+
+
+    - export TAG="review_env"
+    # Récupérer l'adresse IP publique de l'instance
+    - |
+      PUBLIC_IP_REVIEW=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].PublicIpAddress" \
+        --output text)
+
+    # Exporter l'adresse IP pour les étapes suivantes
+    - export HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$PUBLIC_IP_REVIEW
+    - echo "Instance's public IP is $HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2"
+    - apk --no-cache add curl
+    - sleep 10 
+    - curl "http://$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" | grep -q "Hello world!"
+
+# remove_review_environment:
+#   <<: *rules_webapp_changes
+#   stage: Remove review environment
+#   only:
+#     - merge_requests
+#   environment:
+#     name: review/$CI_COMMIT_REF_NAME
+#     action: stop
+#   when: manual
+#   script:
+  # rules:
+  #     - changes:
+  #         - Dockerfile
+  #         - webapp/**/*.py
+  #       when: always
+  #     - when: never
+
+
+remove_review_environment:
+ # <<: *rules_webapp_changes
+  stage: Remove review environment
+  only:
+    - merge_requests
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
+  when: manual
+  # rules:
+  #   - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_COMMIT_BRANCH != "main"'
+  #     changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: manual
+
+  #   - main
+  script:
+    #- *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI 
+    - apk add --no-cache python3 py3-pip
+    - python3 -m venv venv  # Créer un environnement virtuel
+    - source venv/bin/activate  # Activer l'environnement virtuel
+    - pip install awscli  # Installer awscli dans l'environnement virtuel
+
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_DEFAULT_REGION
+    
+
+    - export BRANCH_NAME=$CI_COMMIT_REF_NAME
+    - export TAG="review-$BRANCH_NAME"
+    - export NEW_TAG="destroyed-$BRANCH_NAME"
+
+    - |
+      INSTANCE_ID=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].InstanceId" \
+        --output text)
+
+    - |
+      if [ -n "$INSTANCE_ID" ]; then
+        echo "Suppression de l'instance avec le tag '$TAG': $INSTANCE_ID"
+
+        # Mettre à jour le tag de l'instance
+        aws ec2 create-tags --resources $INSTANCE_ID --tags Key=Name,Value=$NEW_TAG
+        echo "Tag de l'instance mis à jour en '$NEW_TAG'."
+
+        echo "Suppression de l'instance avec le tag '$NEW_TAG': $INSTANCE_ID"
+        aws ec2 terminate-instances --instance-ids $INSTANCE_ID
+        echo "Instance EC2 supprimée avec le tag '$NEW_TAG'."
+      else
+        echo "Aucune instance avec le tag '$TAG' à supprimer."
+      fi
+  # rules:
+  #   - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_STATE == "merged"'
+  #     when: always
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
+
+
+
+# Job de provisionnement de l'instance EC2 pour l'environnement staging
+provision_IaC_EC2_staging:
+ # <<: *rules_webapp_changes
+  stage: IaC EC2 and deploy staging environment
+  only:
+  - main
+  environment:
+    name: staging-environment
+    url: http://${HOSTNAME_DEPLOY_STAGING_EC2}
+  script:
+    - export INIT_PATH=$(pwd)
+    - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
+
+    # # Installer Python et pip avec apk
+    # - apk add --no-cache python3 py3-pip  
+
+    # # Créer et activer l'environnement virtuel
+    # - python3 -m venv /tmp/venv
+    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+
+    # # Installer awscli
+    # - pip install awscli  
+
+    # # Configurer AWS CLI avec les variables GitLab
+    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    # - aws configure set region $AWS_DEFAULT_REGION
+
+    - export TAG="staging_env"
+
+    # Vérifier si une instance existe déjà
+    - |
+      INSTANCE_ID=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].InstanceId" \
+        --output text)
+      
+    - |
+      if [ -n "$INSTANCE_ID" ]; then
+        echo "An instance with the tag '$TAG' already exists: $INSTANCE_ID"
+      else
+        echo "No instance found. Creating a new EC2 instance."
+
+        # Vérifier que la variable ID_AMI_UBUNTU est définie avant de créer l'instance
+        if [ -z "$ID_AMI_UBUNTU" ]; then
+          echo "AMI_ID is not set! Exiting..."
+          exit 1
+        fi
+
+        # Vérifier que la variable INSTANCE_TYPE est définie avant de créer l'instance
+        if [ -z "$INSTANCE_TYPE" ]; then
+          echo "INSTANCE_TYPE is not set! Exiting..."
+          exit 1
+        fi
+
+        # Créer une nouvelle instance EC2
+        USER_DATA="#!/bin/bash
+        curl -fsSL https://get.docker.com -o install-docker.sh
+        sh install-docker.sh --dry-run
+        sudo sh install-docker.sh
+        sudo usermod -aG docker ubuntu"
+
+        # Créer l'instance avec les informations fournies
+        aws ec2 run-instances \
+          --image-id $ID_AMI_UBUNTU \
+          --count 1 \
+          --instance-type $INSTANCE_TYPE \
+          --key-name ssh-key \
+          --security-group-ids $ID_SECURITY_GROUP \
+          --block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=$STORAGE,DeleteOnTermination=true}" \
+          --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value='$TAG'}]' \
+          --user-data "$USER_DATA"
+
+        # Attendre 30 secondes
+        sleep 30
+        echo "EC2 instance created with tag '$TAG'."
+      fi
+
+    # Récupérer l'adresse IP publique de l'instance
+    - |
+      PUBLIC_IP=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].PublicIpAddress" \
+        --output text)
+
+    - |
+      if [ -z "$PUBLIC_IP" ]; then
+        echo "No instance found with the tag '$TAG' or the instance is not running."
+        exit 1
+      else
+        echo "Instance public IP is $PUBLIC_IP"
+      fi
+
+    # Exporter l'adresse IP pour les étapes suivantes
+    - export HOSTNAME_DEPLOY_STAGING_EC2=$PUBLIC_IP
+    - echo "Instance's public IP is $HOSTNAME_DEPLOY_STAGING_EC2"
+
+    # Sauvegarder dans un fichier d'environnement
+    - cd $INIT_PATH
+    - echo "HOSTNAME_DEPLOY_STAGING_EC2=$HOSTNAME_DEPLOY_STAGING_EC2" >> deploy.env
+    
+#  # Installation du client SSH pour la connexion à l'instance EC2
+#     - apk add openssh-client
+#     # Démarrage de l'agent SSH pour la gestion de la clé privée
+#     - eval $(ssh-agent -s)
+#     # Création du dossier .ssh avec permissions sécurisées
+#     - mkdir -p ~/.ssh
+#     # Application des permissions pour sécuriser les fichiers SSH
+#     - chmod -R 400 ~/.ssh
+#     # Création d'un fichier known_hosts pour éviter les alertes SSH
+#     - touch ~/.ssh/known_hosts
+#     # Accès au dossier SSH
+#     - cd ~/.ssh
+#     # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
+#     - echo "${SSH_KEY}" > id_rsa
+#      # Application de permissions sécurisées à la clé privée
+#     - chmod 0400 id_rsa
+    - *setup_ssh
+    # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
+    - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_STAGING_EC2} >> ~/.ssh/known_hosts
+    - command1="docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
+    # Télécharge l'image Docker spécifique à la branche actuelle
+    - command2="docker pull $IMAGE_NAME:$CI_COMMIT_REF_NAME"
+    # Supprime l'ancien conteneur s'il existe
+    - command3="docker rm -f webapp" 
+    # Démarre un nouveau conteneur avec l'image mise à jour
+    - command4="docker run -d -p 80:5000 -e PORT=5000 --name webapp $IMAGE_NAME:$CI_COMMIT_REF_NAME"
+
+    # Connexion SSH à l'instance EC2 et exécution des commandes Docker définies
+    - ssh -t ${SSH_USER}@${HOSTNAME_DEPLOY_STAGING_EC2} 
+      -o SendEnv=IMAGE_NAME 
+      -o SendEnv=CI_COMMIT_REF_NAME 
+      -o SendEnv=CI_REGISTRY_USER 
+      -o SendEnv=CI_REGISTRY_PASSWORD 
+      -o SendEnv=CI_REGISTRY 
+      -C "$command1 && $command2 && $command3 && $command4"
+  artifacts:
+    paths:
+      - deploy.env  # Enregistrer l'adresse IP dans un fichier d'environnement
+    expire_in: 1 week  # Optionnel, durée de conservation de l'artefact
+  # rules:
+  #     - changes:
+  #         - Dockerfile
+  #         - webapp/**/*.py
+  #       when: always
+  #     - when: never
+
+
+
+cleanup_docker:
+  stage: cleanup
+  script:
+    - docker container prune -f
+    - docker image prune -af
+    - docker volume prune -f
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
