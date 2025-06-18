@@ -14,7 +14,6 @@ stages:
 - Release image - Packaging
 - IaC EC2 and deploy review environment
 - Test review environment
-#- cleanup review environment
 - Remove review environment
 
 
