@@ -334,7 +334,8 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     - echo "${SSH_KEY}" > id_rsa
      # Application de permissions sécurisées à la clé privée
     - chmod 0400 id_rsa
-    - ssh-add id_rsa  # Ajout de la clé privée à l'agent SSH
+    # Ajout de la clé privée à l'agent SSH
+    - ssh-add id_rsa  
     # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
     - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} >> ~/.ssh/known_hosts
     - command1="docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
