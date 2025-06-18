@@ -382,15 +382,30 @@ test_review_environment:
     - sleep 10 
     - curl "http://$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" | grep -q "Hello world!"
 
+# remove_review_environment:
+#   <<: *rules_webapp_changes
+#   stage: Remove review environment
+#   only:
+#     - merge_requests
+#   environment:
+#     name: review/$CI_COMMIT_REF_NAME
+#     action: stop
+#   when: manual
+#   script:
+
 remove_review_environment:
-  <<: *rules_webapp_changes
   stage: Remove review environment
-  only:
-    - merge_requests
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
   when: manual
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: manual
+    - when: never
   script:
     #- *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI 
     - apk add --no-cache python3 py3-pip
