@@ -28,6 +28,7 @@ stages:
 #     - when: never
 
 
+
 lint_code:
  # <<: *rules_webapp_changes
   stage: Linter
@@ -51,6 +52,12 @@ lint_code:
     # Ne fait pas échouer le job même s’il y a des alertes
     - hadolint Dockerfile || true
   allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
 
 
 build:
@@ -65,6 +72,13 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
+
 
 
 #Job pour analyser les vulnérabilités de sécurité avec Trivy
@@ -97,9 +111,15 @@ test_acceptance:
     - sleep 5
     - apk --no-cache add curl
     - curl "http://docker" | grep -q "Hello world!"
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
 
-    # Job de tests unitaires
 
+# Job de tests unitaires
 test_unitaires: 
  # <<: *rules_webapp_changes
   stage: Unit testing  
@@ -119,6 +139,12 @@ test_unitaires:
       - webapp/tests/results  # Sauvegarde le répertoire contenant les résultats des tests pour qu'il soit accessible dans GitLab CI
     when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
   allow_failure: false  # Si les tests échouent, le pipeline échoue
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
 
 
 test_integration:
@@ -139,6 +165,13 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
+  rules:
+      - changes:
+          - Dockerfile
+          - webapp/**/*.py
+        when: always
+      - when: never
+
 
 sonarcloud_scan:
   # <<: *rules_webapp_changes
@@ -151,6 +184,13 @@ sonarcloud_scan:
         key: "${CI_JOB_NAME}"
         paths:
           - .sonar/cache
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+      when: always
+    - when: never
+
 
   # only:
   #   - merge_requests
@@ -172,6 +212,12 @@ release_image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
 
 
 .setup_python_aws: &setup_python_aws
@@ -209,9 +255,6 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
     #on_stop: stop_review
 
-  rules:
-    - if: '$CI_COMMIT_REF_NAME != "main"'
-      when: always
   script:
     - export INIT_PATH=$(pwd)
 
@@ -342,6 +385,12 @@ provision_IaC_EC2_review_and_deploy_review_environment:
   artifacts:
     reports:
       dotenv: deploy.env
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
 
 
 # Test de l'environnement review
@@ -395,21 +444,31 @@ test_review_environment:
 #     action: stop
 #   when: manual
 #   script:
+  rules:
+      - changes:
+          - Dockerfile
+          - webapp/**/*.py
+        when: always
+      - when: never
 
 
 remove_review_environment:
  # <<: *rules_webapp_changes
   stage: Remove review environment
+  only:
+    - merge_requests
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
   when: manual
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_COMMIT_BRANCH != "main"'
-      changes:
-        - Dockerfile
-        - webapp/**/*.py
-      when: manual
+  # rules:
+  #   - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_COMMIT_BRANCH != "main"'
+  #     changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: manual
+
+  #   - main
   script:
     #- *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI 
     - apk add --no-cache python3 py3-pip
@@ -449,7 +508,13 @@ remove_review_environment:
   # rules:
   #   - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_STATE == "merged"'
   #     when: always
-  
+  # rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
+
 
 
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
@@ -592,6 +657,12 @@ provision_IaC_EC2_staging:
     paths:
       - deploy.env  # Enregistrer l'adresse IP dans un fichier d'environnement
     expire_in: 1 week  # Optionnel, durée de conservation de l'artefact
+  # rules:
+  #     - changes:
+  #         - Dockerfile
+  #         - webapp/**/*.py
+  #       when: always
+  #     - when: never
 
 
 
