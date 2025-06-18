@@ -17,8 +17,16 @@ stages:
 - Remove review environment
 - IaC EC2 and deploy staging environment
 
+.rules_webapp_changes: &rules_webapp_changes
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+    - when: never
+
 
 lint_code:
+  <<: *rules_webapp_changes
   stage: Linter
   image: python:3.9-slim
   before_script:
@@ -39,20 +47,12 @@ lint_code:
     # Analyse Dockerfile avec hadolint
     # Ne fait pas échouer le job même s’il y a des alertes
     - hadolint Dockerfile || true
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
-
-
   allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
 
 
 build:
   #image: docker:latest
+  <<: *rules_webapp_changes
   stage: Build image - Compilation
   # services:
   #   - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
@@ -62,17 +62,11 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
-  rules:
-  - changes:
-      - Dockerfile
-      - webapp/**/*.py
-      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  - when: never
 
 
 #Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
+  <<: *rules_webapp_changes
   stage: Security scan
   image: 
     name: aquasec/trivy:0.29.0
@@ -85,18 +79,12 @@ scan_security:
   artifacts:
     paths:
       - trivy-report.json
-  rules:
-  - changes:
-      - Dockerfile
-      - webapp/**/*.py
-      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  - when: never
 
 # Job de test d'acceptation
-test acceptance:
+test_acceptance:
   #image: docker:latest
-  stage: Acceptance Test
+  <<: *rules_webapp_changes
+  stage: Acceptance test
   #services:
   #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
   #  alias: docker
@@ -106,16 +94,11 @@ test acceptance:
     - sleep 5
     - apk --no-cache add curl
     - curl "http://docker" | grep -q "Hello world!"
-  rules:
-  - changes:
-      - Dockerfile
-      - webapp/**/*.py
-      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  - when: never
 
     # Job de tests unitaires
+
 test_unitaires: 
+  <<: *rules_webapp_changes
   stage: Unit testing  
   image: python:3.9-slim  # Utilisation de l'image Docker Python 3.9 allégée
   before_script:
@@ -132,17 +115,11 @@ test_unitaires:
     paths:
       - webapp/tests/results  # Sauvegarde le répertoire contenant les résultats des tests pour qu'il soit accessible dans GitLab CI
     when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
-
   allow_failure: false  # Si les tests échouent, le pipeline échoue
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
+
 
 test_integration:
+  <<: *rules_webapp_changes
   stage: Integration testing
   image: python:3.9-slim
   before_script:
@@ -159,16 +136,10 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    - when: never
 
 sonarcloud_scan:
-  stage: Sonar - Quality
+  <<: *rules_webapp_changes
+  stage: Sonar quality
   image: sonarsource/sonar-scanner-cli:latest
   script:
     # Lancer l’analyse SonarCloud avec les paramètres du projet
@@ -181,16 +152,9 @@ sonarcloud_scan:
   # only:
   #   - merge_requests
   #   - main
-  rules:
-  - changes:
-      - Dockerfile
-      - webapp/**/*.py
-      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  - when: never
 
-
-release image:
+release_image:
+  <<: *rules_webapp_changes
   stage: Release image - Packaging
   script:
     # Charger l'image Docker à partir du fichier tar
@@ -205,19 +169,36 @@ release image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-  rules:
-      - changes:
-          - Dockerfile
-          - webapp/**/*.py
-          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-      - when: never
 
 
+.setup_python_aws: &setup_python_aws
+  # Installer Python et pip avec apk
+  - apk add --no-cache python3 py3-pip
+  # Créer et activer l'environnement virtuel
+  - python3 -m venv /tmp/venv
+  # Activer l'environnement virtuel
+  - source /tmp/venv/bin/activate
+  # Installer awscli
+  - pip install awscli
+  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+  - aws configure set region $AWS_DEFAULT_REGION
+
+.setup_ssh: &setup_ssh
+  - apk add openssh-client
+  - eval $(ssh-agent -s)
+  - mkdir -p ~/.ssh
+  - chmod -R 400 ~/.ssh
+  - touch ~/.ssh/known_hosts
+  - cd ~/.ssh
+  - echo "${SSH_KEY}" > id_rsa
+  - chmod 0400 id_rsa
+  - ssh-add id_rsa
 
 
 # Job de provisionnement de l'instance EC2 pour l'environnement review
 provision_IaC_EC2_review_and_deploy_review_environment:
+  <<: *rules_webapp_changes
   stage: IaC EC2 and deploy review environment
   environment:
     name: review/$CI_COMMIT_REF_NAME
@@ -228,31 +209,22 @@ provision_IaC_EC2_review_and_deploy_review_environment:
   rules:
     - if: '$CI_COMMIT_REF_NAME != "main"'
       when: always
-
-    # - changes:
-    #       - Dockerfile
-    #       - webapp/**/*.py
-    #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-    #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-    # - when: never
-
   script:
     - export INIT_PATH=$(pwd)
 
-    # Installer Python et pip avec apk
-    - apk add --no-cache python3 py3-pip  
+    - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
+    
+    # - apk add --no-cache python3 py3-pip      
+    # - python3 -m venv /tmp/venv
+    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
 
-    # Créer et activer l'environnement virtuel
-    - python3 -m venv /tmp/venv
-    - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+    # # Installer awscli
+    # - pip install awscli  
 
-    # Installer awscli
-    - pip install awscli  
-
-    # Configurer AWS CLI avec les variables GitLab
-    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-    - aws configure set region $AWS_DEFAULT_REGION
+    # # Configurer AWS CLI avec les variables GitLab
+    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    # - aws configure set region $AWS_DEFAULT_REGION
 
     - export TAG="review_env"
 
@@ -328,23 +300,24 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     - echo "HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" >> deploy.env
     
  # Installation du client SSH pour la connexion à l'instance EC2
-    - apk add openssh-client
-    # Démarrage de l'agent SSH pour la gestion de la clé privée
-    - eval $(ssh-agent -s)
-    # Création du dossier .ssh avec permissions sécurisées
-    - mkdir -p ~/.ssh
-    # Application des permissions pour sécuriser les fichiers SSH
-    - chmod -R 400 ~/.ssh
-    # Création d'un fichier known_hosts pour éviter les alertes SSH
-    - touch ~/.ssh/known_hosts
-    # Accès au dossier SSH
-    - cd ~/.ssh
-    # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
-    - echo "${SSH_KEY}" > id_rsa
-     # Application de permissions sécurisées à la clé privée
-    - chmod 0400 id_rsa
-    # Ajout de la clé privée à l'agent SSH
-    - ssh-add id_rsa  
+    # - apk add openssh-client
+    # # Démarrage de l'agent SSH pour la gestion de la clé privée
+    # - eval $(ssh-agent -s)
+    # # Création du dossier .ssh avec permissions sécurisées
+    # - mkdir -p ~/.ssh
+    # # Application des permissions pour sécuriser les fichiers SSH
+    # - chmod -R 400 ~/.ssh
+    # # Création d'un fichier known_hosts pour éviter les alertes SSH
+    # - touch ~/.ssh/known_hosts
+    # # Accès au dossier SSH
+    # - cd ~/.ssh
+    # # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
+    # - echo "${SSH_KEY}" > id_rsa
+    #  # Application de permissions sécurisées à la clé privée
+    # - chmod 0400 id_rsa
+    # # Ajout de la clé privée à l'agent SSH
+    # - ssh-add id_rsa  
+    - *setup_ssh  # Utilisation de l'ancre pour configurer SSH
     # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
     - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} >> ~/.ssh/known_hosts
     - command1="docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
@@ -369,27 +342,30 @@ provision_IaC_EC2_review_and_deploy_review_environment:
 
 
 # Test de l'environnement review
-test review environment:
+test_review_environment:
+  <<: *rules_webapp_changes
   stage: Test review environment
   environment:
     name: review/$CI_COMMIT_REF_NAME
     url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
   script:
+    - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
 
-    # Installer Python et pip avec apk
-    - apk add --no-cache python3 py3-pip  
+    # # Installer Python et pip avec apk
+    # - apk add --no-cache python3 py3-pip  
 
-    # Créer et activer l'environnement virtuel
-    - python3 -m venv /tmp/venv
-    - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+    # # Créer et activer l'environnement virtuel
+    # - python3 -m venv /tmp/venv
+    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
 
-    # Installer awscli
-    - pip install awscli  
+    # # Installer awscli
+    # - pip install awscli  
 
-    # Configurer AWS CLI avec les variables GitLab
-    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-    - aws configure set region $AWS_DEFAULT_REGION
+    # # Configurer AWS CLI avec les variables GitLab
+    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    # - aws configure set region $AWS_DEFAULT_REGION
+
 
     - export TAG="review_env"
     # Récupérer l'adresse IP publique de l'instance
@@ -406,25 +382,8 @@ test review environment:
     - sleep 10 
     - curl "http://$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" | grep -q "Hello world!"
 
-
-
-# stop_review:
-#   stage: cleanup review environment
-#   image: amazon/aws-cli:latest
-#   script:
-#     - "echo \"🧼 Cleanup de l'environnement de revue : $CI_COMMIT_REF_NAME\""
-#     - export TAG="review_${CI_COMMIT_REF_SLUG}"
-#     - aws --version
-#     - env | grep TAG
-#     - bash ./destroy-ec2-review.sh
-#   environment:
-#     name: review/$CI_COMMIT_REF_NAME
-#     action: stop
-#   rules:
-#     - if: '$CI_COMMIT_REF_NAME != "main"'
-#       when: manual
-
-remove review environment :
+remove_review_environment:
+  <<: *rules_webapp_changes
   stage: Remove review environment
   only:
     - merge_requests
@@ -433,6 +392,7 @@ remove review environment :
     action: stop
   when: manual
   script:
+    #- *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI 
     - apk add --no-cache python3 py3-pip
     - python3 -m venv venv  # Créer un environnement virtuel
     - source venv/bin/activate  # Activer l'environnement virtuel
@@ -441,6 +401,7 @@ remove review environment :
     - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
     - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
     - aws configure set region $AWS_DEFAULT_REGION
+    
 
     - export BRANCH_NAME=$CI_COMMIT_REF_NAME
     - export TAG="review-$BRANCH_NAME"
@@ -473,6 +434,7 @@ remove review environment :
 
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
 provision_IaC_EC2_staging:
+  <<: *rules_webapp_changes
   stage: IaC EC2 and deploy staging environment
   only:
   - main
@@ -481,21 +443,22 @@ provision_IaC_EC2_staging:
     url: http://${HOSTNAME_DEPLOY_STAGING_EC2}
   script:
     - export INIT_PATH=$(pwd)
+    - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
 
-    # Installer Python et pip avec apk
-    - apk add --no-cache python3 py3-pip  
+    # # Installer Python et pip avec apk
+    # - apk add --no-cache python3 py3-pip  
 
-    # Créer et activer l'environnement virtuel
-    - python3 -m venv /tmp/venv
-    - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+    # # Créer et activer l'environnement virtuel
+    # - python3 -m venv /tmp/venv
+    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
 
-    # Installer awscli
-    - pip install awscli  
+    # # Installer awscli
+    # - pip install awscli  
 
-    # Configurer AWS CLI avec les variables GitLab
-    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-    - aws configure set region $AWS_DEFAULT_REGION
+    # # Configurer AWS CLI avec les variables GitLab
+    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    # - aws configure set region $AWS_DEFAULT_REGION
 
     - export TAG="staging_env"
 
@@ -570,22 +533,23 @@ provision_IaC_EC2_staging:
     - cd $INIT_PATH
     - echo "HOSTNAME_DEPLOY_STAGING_EC2=$HOSTNAME_DEPLOY_STAGING_EC2" >> deploy.env
     
- # Installation du client SSH pour la connexion à l'instance EC2
-    - apk add openssh-client
-    # Démarrage de l'agent SSH pour la gestion de la clé privée
-    - eval $(ssh-agent -s)
-    # Création du dossier .ssh avec permissions sécurisées
-    - mkdir -p ~/.ssh
-    # Application des permissions pour sécuriser les fichiers SSH
-    - chmod -R 400 ~/.ssh
-    # Création d'un fichier known_hosts pour éviter les alertes SSH
-    - touch ~/.ssh/known_hosts
-    # Accès au dossier SSH
-    - cd ~/.ssh
-    # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
-    - echo "${SSH_KEY}" > id_rsa
-     # Application de permissions sécurisées à la clé privée
-    - chmod 0400 id_rsa
+#  # Installation du client SSH pour la connexion à l'instance EC2
+#     - apk add openssh-client
+#     # Démarrage de l'agent SSH pour la gestion de la clé privée
+#     - eval $(ssh-agent -s)
+#     # Création du dossier .ssh avec permissions sécurisées
+#     - mkdir -p ~/.ssh
+#     # Application des permissions pour sécuriser les fichiers SSH
+#     - chmod -R 400 ~/.ssh
+#     # Création d'un fichier known_hosts pour éviter les alertes SSH
+#     - touch ~/.ssh/known_hosts
+#     # Accès au dossier SSH
+#     - cd ~/.ssh
+#     # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
+#     - echo "${SSH_KEY}" > id_rsa
+#      # Application de permissions sécurisées à la clé privée
+#     - chmod 0400 id_rsa
+    - *setup_ssh
     # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
     - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_STAGING_EC2} >> ~/.ssh/known_hosts
     - command1="docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
@@ -604,8 +568,6 @@ provision_IaC_EC2_staging:
       -o SendEnv=CI_REGISTRY_PASSWORD 
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
-
-
   artifacts:
     paths:
       - deploy.env  # Enregistrer l'adresse IP dans un fichier d'environnement
