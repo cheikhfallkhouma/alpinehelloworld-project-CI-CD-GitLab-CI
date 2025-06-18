@@ -19,17 +19,17 @@ stages:
 - cleanup
 
 
-.rules_webapp_changes: &rules_webapp_changes
-  rules:
-    - changes:
-        - Dockerfile
-        - webapp/**/*.py
-      when: always
-    - when: never
+# .rules_webapp_changes: &rules_webapp_changes
+#   rules:
+#     - changes:
+#         - Dockerfile
+#         - webapp/**/*.py
+#       when: always
+#     - when: never
 
 
 lint_code:
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: Linter
   image: python:3.9-slim
   before_script:
@@ -55,7 +55,7 @@ lint_code:
 
 build:
   #image: docker:latest
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: Build image - Compilation
   # services:
   #   - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
@@ -69,7 +69,7 @@ build:
 
 #Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: Security scan
   image: 
     name: aquasec/trivy:0.29.0
@@ -86,7 +86,7 @@ scan_security:
 # Job de test d'acceptation
 test_acceptance:
   #image: docker:latest
-  <<: *rules_webapp_changes
+  #<<: *rules_webapp_changes
   stage: Acceptance test
   #services:
   #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
@@ -101,7 +101,7 @@ test_acceptance:
     # Job de tests unitaires
 
 test_unitaires: 
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: Unit testing  
   image: python:3.9-slim  # Utilisation de l'image Docker Python 3.9 allégée
   before_script:
@@ -122,7 +122,7 @@ test_unitaires:
 
 
 test_integration:
-  <<: *rules_webapp_changes
+  # <<: *rules_webapp_changes
   stage: Integration testing
   image: python:3.9-slim
   before_script:
@@ -141,7 +141,7 @@ test_integration:
   allow_failure: false
 
 sonarcloud_scan:
-  <<: *rules_webapp_changes
+  # <<: *rules_webapp_changes
   stage: Sonar quality
   image: sonarsource/sonar-scanner-cli:latest
   script:
@@ -157,7 +157,7 @@ sonarcloud_scan:
   #   - main
 
 release_image:
-  <<: *rules_webapp_changes
+  # <<: *rules_webapp_changes
   stage: Release image - Packaging
   script:
     # Charger l'image Docker à partir du fichier tar
@@ -201,7 +201,7 @@ release_image:
 
 # Job de provisionnement de l'instance EC2 pour l'environnement review
 provision_IaC_EC2_review_and_deploy_review_environment:
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: IaC EC2 and deploy review environment
   environment:
     name: review/$CI_COMMIT_REF_NAME
@@ -346,7 +346,7 @@ provision_IaC_EC2_review_and_deploy_review_environment:
 
 # Test de l'environnement review
 test_review_environment:
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: Test review environment
   environment:
     name: review/$CI_COMMIT_REF_NAME
@@ -398,7 +398,7 @@ test_review_environment:
 
 
 remove_review_environment:
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: Remove review environment
   environment:
     name: review/$CI_COMMIT_REF_NAME
@@ -454,7 +454,7 @@ remove_review_environment:
 
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
 provision_IaC_EC2_staging:
-  <<: *rules_webapp_changes
+ # <<: *rules_webapp_changes
   stage: IaC EC2 and deploy staging environment
   only:
   - main
