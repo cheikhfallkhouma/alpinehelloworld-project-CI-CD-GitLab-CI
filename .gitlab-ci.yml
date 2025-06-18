@@ -359,14 +359,12 @@ stop_review:
   stage: cleanup review environment
   script:
     - "echo \"🧼 Cleanup de l'environnement de revue : $CI_COMMIT_REF_NAME\""
-    - test -f webapp/destroy-ec2-review.sh || { echo "❌ Script introuvable !"; exit 1; }
-    - chmod +x webapp/destroy-ec2-review.sh
-    - TAG="review_${CI_COMMIT_REF_SLUG}" ./webapp/destroy-ec2-review.sh
+    - test -f destroy-ec2-review.sh || { echo "❌ Script introuvable !"; exit 1; }
+    - chmod +x destroy-ec2-review.sh
+    - TAG="review_${CI_COMMIT_REF_SLUG}" ./destroy-ec2-review.sh
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
   rules:
     - if: '$CI_COMMIT_REF_NAME != "main"'
       when: manual
-
-
