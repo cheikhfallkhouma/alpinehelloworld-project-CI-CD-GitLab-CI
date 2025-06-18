@@ -222,7 +222,7 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     name: review/$CI_COMMIT_REF_NAME
     #name: review-environment
     url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
-    on_stop: stop_review
+    #on_stop: stop_review
 
   rules:
     - if: '$CI_COMMIT_REF_NAME != "main"'
