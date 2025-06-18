@@ -362,17 +362,15 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
 
-
 stop_review:
   stage: cleanup review environment
   image: amazon/aws-cli:latest
   script:
-    - apk add --no-cache bash       # installe bash (image AWS CLI est basée sur Alpine)
-    - ls -l destroy-ec2-review.sh
-    - head -1 destroy-ec2-review.sh
-    - chmod +x destroy-ec2-review.sh
     - "echo \"🧼 Cleanup de l'environnement de revue : $CI_COMMIT_REF_NAME\""
-    - TAG="review_${CI_COMMIT_REF_SLUG}" bash ./destroy-ec2-review.sh
+    - export TAG="review_${CI_COMMIT_REF_SLUG}"
+    - aws --version
+    - env | grep TAG
+    - bash ./destroy-ec2-review.sh
   environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
