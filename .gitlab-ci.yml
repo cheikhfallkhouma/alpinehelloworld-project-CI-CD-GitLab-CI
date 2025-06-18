@@ -37,13 +37,13 @@ lint_code:
     # Analyse Dockerfile avec hadolint
     # Ne fait pas échouer le job même s’il y a des alertes
     - hadolint Dockerfile || true
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 
   allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
@@ -60,13 +60,13 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
-  # rules:
-  # - changes:
-  #     - Dockerfile
-  #     - webapp/**/*.py
-  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  # - when: never
+  rules:
+  - changes:
+      - Dockerfile
+      - webapp/**/*.py
+      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  - when: never
 
 
 #Job pour analyser les vulnérabilités de sécurité avec Trivy
@@ -83,13 +83,13 @@ scan_security:
   artifacts:
     paths:
       - trivy-report.json
-  # rules:
-  # - changes:
-  #     - Dockerfile
-  #     - webapp/**/*.py
-  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  # - when: never
+  rules:
+  - changes:
+      - Dockerfile
+      - webapp/**/*.py
+      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  - when: never
 
 # Job de test d'acceptation
 test acceptance:
@@ -104,13 +104,13 @@ test acceptance:
     - sleep 5
     - apk --no-cache add curl
     - curl "http://docker" | grep -q "Hello world!"
-  # rules:
-  # - changes:
-  #     - Dockerfile
-  #     - webapp/**/*.py
-  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  # - when: never
+  rules:
+  - changes:
+      - Dockerfile
+      - webapp/**/*.py
+      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  - when: never
 
     # Job de tests unitaires
 test_unitaires: 
@@ -132,13 +132,13 @@ test_unitaires:
     when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
 
   allow_failure: false  # Si les tests échouent, le pipeline échoue
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 test_integration:
   stage: Integration testing
@@ -157,13 +157,13 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #       - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #       - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #   - when: never
+  rules:
+    - changes:
+        - Dockerfile
+        - webapp/**/*.py
+        - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+        - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+    - when: never
 
 sonarcloud_scan:
   stage: Sonar - Quality
@@ -179,13 +179,13 @@ sonarcloud_scan:
   # only:
   #   - merge_requests
   #   - main
-  # rules:
-  # - changes:
-  #     - Dockerfile
-  #     - webapp/**/*.py
-  #     - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #     - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  # - when: never
+  rules:
+  - changes:
+      - Dockerfile
+      - webapp/**/*.py
+      - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+      - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+  - when: never
 
 
 release image:
@@ -203,13 +203,13 @@ release image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-  # rules:
-  #     - changes:
-  #         - Dockerfile
-  #         - webapp/**/*.py
-  #         - scripts/**/*.py       # ou tout autre fichier source impactant ton build
-  #         - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
-  #     - when: never
+  rules:
+      - changes:
+          - Dockerfile
+          - webapp/**/*.py
+          - scripts/**/*.py       # ou tout autre fichier source impactant ton build
+          - path/to/other/files/**  # ajoute ici les dossiers/fichiers nécessaires 
+      - when: never
 
 
 
@@ -334,6 +334,7 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     - echo "${SSH_KEY}" > id_rsa
      # Application de permissions sécurisées à la clé privée
     - chmod 0400 id_rsa
+    - ssh-add id_rsa  # Ajout de la clé privée à l'agent SSH
     # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
     - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} >> ~/.ssh/known_hosts
     - command1="docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY"
