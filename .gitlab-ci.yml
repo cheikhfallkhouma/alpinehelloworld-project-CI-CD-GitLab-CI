@@ -16,7 +16,7 @@ stages:
 - Test review environment
 - Remove review environment
 - IaC EC2 and deploy staging environment
-- cleanup
+#- cleanup
 
 
 # .rules_webapp_changes: &rules_webapp_changes
@@ -388,6 +388,11 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -o SendEnv=CI_REGISTRY_PASSWORD 
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
+  rules:
+  - if: '$CI_COMMIT_BRANCH != "main"'
+    when: always
+  - when: never
+
   # artifacts:
   #   reports:
   #     dotenv: deploy.env
@@ -456,6 +461,10 @@ test_review_environment:
   #         - webapp/**/*.py
   #       when: always
   #     - when: never
+  rules:
+    - if: '$CI_COMMIT_BRANCH != "main"'
+      when: always
+    - when: never
 
 
 remove_review_environment:
@@ -672,12 +681,12 @@ provision_IaC_EC2_staging:
 
 
 
-cleanup_docker:
-  stage: cleanup
-  script:
-    - docker container prune -f
-    - docker image prune -af
-    - docker volume prune -f
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: always
+# cleanup_docker:
+#   stage: cleanup
+#   script:
+#     - docker container prune -f
+#     - docker image prune -af
+#     - docker volume prune -f
+#   rules:
+#     - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+#       when: always
