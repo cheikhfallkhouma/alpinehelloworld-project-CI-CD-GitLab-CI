@@ -13,6 +13,7 @@ stages:
 - Sonar - Quality
 - Release image - Packaging
 - IaC EC2 and deploy review environment
+- Test review environment
 #- cleanup review environment
 - Remove review environment
 
@@ -363,6 +364,47 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
 
+
+# Test de l'environnement review
+test review environment:
+  stage: Test review environment
+  environment:
+    name: review-environment
+    url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
+  script:
+
+    # Installer Python et pip avec apk
+    - apk add --no-cache python3 py3-pip  
+
+    # Créer et activer l'environnement virtuel
+    - python3 -m venv /tmp/venv
+    - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+
+    # Installer awscli
+    - pip install awscli  
+
+    # Configurer AWS CLI avec les variables GitLab
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_DEFAULT_REGION
+
+    - export TAG="review_env"
+    # Récupérer l'adresse IP publique de l'instance
+    - |
+      PUBLIC_IP_REVIEW=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].PublicIpAddress" \
+        --output text)
+
+    # Exporter l'adresse IP pour les étapes suivantes
+    - export HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$PUBLIC_IP_REVIEW
+    - echo "Instance's public IP is $HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2"
+    - apk --no-cache add curl
+    - sleep 10 
+    - curl "http://$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" | grep -q "Hello world!"
+
+
+
 # stop_review:
 #   stage: cleanup review environment
 #   image: amazon/aws-cli:latest
@@ -379,7 +421,7 @@ provision_IaC_EC2_review_and_deploy_review_environment:
 #     - if: '$CI_COMMIT_REF_NAME != "main"'
 #       when: manual
 
-Remove review environment :
+remove review environment :
   stage: Remove review environment
   only:
     - merge_requests
