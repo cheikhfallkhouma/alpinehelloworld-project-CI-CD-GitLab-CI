@@ -388,10 +388,6 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -o SendEnv=CI_REGISTRY_PASSWORD 
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
-  rules:
-  - if: '$CI_COMMIT_BRANCH != "main"'
-    when: always
-  - when: never
 
   artifacts:
     reports:
@@ -461,11 +457,6 @@ test_review_environment:
   #         - webapp/**/*.py
   #       when: always
   #     - when: never
-  rules:
-    - if: '$CI_COMMIT_BRANCH != "main"'
-      when: always
-    - when: never
-
 
 remove_review_environment:
  # <<: *rules_webapp_changes
@@ -520,9 +511,7 @@ remove_review_environment:
       else
         echo "Aucune instance avec le tag '$TAG' à supprimer."
       fi
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_STATE == "merged"'
-      when: always
+
   # rules:
   #   - changes:
   #       - Dockerfile
@@ -676,12 +665,6 @@ provision_IaC_EC2_staging:
     # artifacts:
     #   reports:
     #     dotenv: deploy.env
-
-    rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_STATE == "merged"'
-      when: always
-
- 
 
   # rules:
   #     - changes:
