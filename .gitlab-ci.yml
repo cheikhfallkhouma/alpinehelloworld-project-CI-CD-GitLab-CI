@@ -19,17 +19,6 @@ stages:
 - Test staging environment
 #- cleanup
 
-
-# .rules_webapp_changes: &rules_webapp_changes
-#   rules:
-#     - changes:
-#         - Dockerfile
-#         - webapp/**/*.py
-#       when: always
-#     - when: never
-
-
-
 lint_code:
  # <<: *rules_webapp_changes
   stage: Linter
@@ -53,13 +42,6 @@ lint_code:
     # Ne fait pas échouer le job même s’il y a des alertes
     - hadolint Dockerfile || true
   allow_failure: false  # Ce job doit réussir, même s’il affiche des erreurs
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
 
 build:
   #image: docker:latest
@@ -73,14 +55,6 @@ build:
   artifacts:
     paths: 
       - alpinehelloworld.tar
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
-
 
 #Job pour analyser les vulnérabilités de sécurité avec Trivy
 scan_security:
@@ -97,33 +71,16 @@ scan_security:
   artifacts:
     paths:
       - trivy-report.json
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never  
-
+ 
 # Job de test d'acceptation
 test_acceptance:
-  #image: docker:latest
-  #<<: *rules_webapp_changes
   stage: Acceptance Test
-  #services:
-  #- name: docker:dind  # Docker-in-Docker pour pouvoir exécuter des conteneurs Docker dans le pipeline
-  #  alias: docker
   script:
     - docker load < alpinehelloworld.tar
     - docker run -d -p 80:5000 -e PORT=5000 --name webapp alpinehelloworld  # Lancement du conteneur à partir de l'image "alpinehelloworld"
     - sleep 5
     - apk --no-cache add curl
     - curl "http://docker" | grep -q "Hello world!"
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
 
 
 # Job de tests unitaires
@@ -146,16 +103,8 @@ test_unitaires:
       - webapp/tests/results  # Sauvegarde le répertoire contenant les résultats des tests pour qu'il soit accessible dans GitLab CI
     when: always  # Sauvegarde les résultats même si le job échoue, ce qui peut être utile pour déboguer
   allow_failure: false  # Si les tests échouent, le pipeline échoue
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
 
 test_integration:
-  # <<: *rules_webapp_changes
   stage: Integration testing
   image: python:3.9-slim
   before_script:
@@ -163,7 +112,6 @@ test_integration:
     - pip install --root-user-action=ignore -r webapp/requirements.txt
     - pip install pytest
     - export PYTHONPATH=$PYTHONPATH:$(pwd)
-    # Démarrer le serveur ou base de test si nécessaire
   script:
     - mkdir -p webapp/tests/results
     - pytest webapp/tests/integration/ --junitxml=webapp/tests/results/integration_report.xml
@@ -172,13 +120,6 @@ test_integration:
       - webapp/tests/results
     when: always
   allow_failure: false
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
 
 sonarcloud_scan:
   # <<: *rules_webapp_changes
@@ -191,20 +132,8 @@ sonarcloud_scan:
         key: "${CI_JOB_NAME}"
         paths:
           - .sonar/cache
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
-
-  # only:
-  #   - merge_requests
-  #   - main
 
 release_image:
-  # <<: *rules_webapp_changes
   stage: Release image - Packaging
   script:
     # Charger l'image Docker à partir du fichier tar
@@ -219,13 +148,6 @@ release_image:
     - docker push "${IMAGE_NAME}:${CI_COMMIT_REF_NAME}"
     # Pousser l'image Docker avec le tag basé sur le short SHA du commit
     - docker push "${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
 
 .setup_python_aws: &setup_python_aws
   # Installer Python et pip avec apk
@@ -254,33 +176,15 @@ release_image:
 
 # Job de provisionnement de l'instance EC2 pour l'environnement review
 provision_IaC_EC2_review_and_deploy_review_environment:
- # <<: *rules_webapp_changes
   stage: IaC EC2 and deploy review environment
   environment:
     name: review/$CI_COMMIT_REF_NAME
-    #name: review-environment
     url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
-    #on_stop: stop_review
-
   script:
     - export INIT_PATH=$(pwd)
 
     - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
-    
-    # - apk add --no-cache python3 py3-pip      
-    # - python3 -m venv /tmp/venv
-    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
-
-    # # Installer awscli
-    # - pip install awscli  
-
-    # # Configurer AWS CLI avec les variables GitLab
-    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-    # - aws configure set region $AWS_DEFAULT_REGION
-
     - export TAG="review_env"
-
     # Vérifier si une instance existe déjà
     - |
       INSTANCE_ID=$(aws ec2 describe-instances \
@@ -351,25 +255,7 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     # Sauvegarder dans un fichier d'environnement
     - cd $INIT_PATH
     - echo "HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2=$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" >> deploy.env
-    
- # Installation du client SSH pour la connexion à l'instance EC2
-    # - apk add openssh-client
-    # # Démarrage de l'agent SSH pour la gestion de la clé privée
-    # - eval $(ssh-agent -s)
-    # # Création du dossier .ssh avec permissions sécurisées
-    # - mkdir -p ~/.ssh
-    # # Application des permissions pour sécuriser les fichiers SSH
-    # - chmod -R 400 ~/.ssh
-    # # Création d'un fichier known_hosts pour éviter les alertes SSH
-    # - touch ~/.ssh/known_hosts
-    # # Accès au dossier SSH
-    # - cd ~/.ssh
-    # # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
-    # - echo "${SSH_KEY}" > id_rsa
-    #  # Application de permissions sécurisées à la clé privée
-    # - chmod 0400 id_rsa
-    # # Ajout de la clé privée à l'agent SSH
-    # - ssh-add id_rsa  
+
     - *setup_ssh  # Utilisation de l'ancre pour configurer SSH
     # Ajout de la clé publique du serveur distant à known_hosts pour éviter l'invite interactive
     - ssh-keyscan -t rsa  ${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2} >> ~/.ssh/known_hosts
@@ -389,17 +275,9 @@ provision_IaC_EC2_review_and_deploy_review_environment:
       -o SendEnv=CI_REGISTRY_PASSWORD 
       -o SendEnv=CI_REGISTRY 
       -C "$command1 && $command2 && $command3 && $command4"
-
   artifacts:
     reports:
       dotenv: deploy.env
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
 
 # Test de l'environnement review
 test_review_environment:
@@ -410,22 +288,6 @@ test_review_environment:
     url: http://${HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2}
   script:
     - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
-
-    # # Installer Python et pip avec apk
-    # - apk add --no-cache python3 py3-pip  
-
-    # # Créer et activer l'environnement virtuel
-    # - python3 -m venv /tmp/venv
-    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
-
-    # # Installer awscli
-    # - pip install awscli  
-
-    # # Configurer AWS CLI avec les variables GitLab
-    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-    # - aws configure set region $AWS_DEFAULT_REGION
-
 
     - export TAG="review_env"
     # Récupérer l'adresse IP publique de l'instance
@@ -442,29 +304,12 @@ test_review_environment:
     - sleep 10 
     - curl "http://$HOSTNAME_DEPLOY_REVIEW_ENVIRONMENT_EC2" | grep -q "Hello world!"
 
-# remove_review_environment:
-#   <<: *rules_webapp_changes
-#   stage: Remove review environment
-#   only:
-#     - merge_requests
-#   environment:
-#     name: review/$CI_COMMIT_REF_NAME
-#     action: stop
-#   when: manual
-#   script:
-  # rules:
-  #     - changes:
-  #         - Dockerfile
-  #         - webapp/**/*.py
-  #       when: always
-  #     - when: never
   dependencies:
   - provision_IaC_EC2_review_and_deploy_review_environment
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
 
 remove_review_environment:
- # <<: *rules_webapp_changes
   stage: Remove review environment
   only:
     - merge_requests
@@ -472,14 +317,6 @@ remove_review_environment:
     name: review/$CI_COMMIT_REF_NAME
     action: stop
   when: manual
-  # rules:
-  #   - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_COMMIT_BRANCH != "main"'
-  #     changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: manual
-
-  #   - main
   script:
     #- *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI 
     - apk add --no-cache python3 py3-pip
@@ -517,27 +354,8 @@ remove_review_environment:
         echo "Aucune instance avec le tag '$TAG' à supprimer."
       fi
 
-  # rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
-
-
-
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
 provision_IaC_EC2_staging_and_deploy_staging_environment:
-  #image: docker:latest
-  #services:
-  #  - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
-  #rules:
-  #   - changes:
-  #       - Dockerfile
-  #       - webapp/**/*.py
-  #     when: always
-  #   - when: never
- # <<: *rules_webapp_changes
   stage: IaC EC2 and deploy staging environment
   only:
   - main
@@ -547,21 +365,6 @@ provision_IaC_EC2_staging_and_deploy_staging_environment:
   script:
     - export INIT_PATH=$(pwd)
     - *setup_python_aws  # Utilisation de l'ancre pour configurer Python et AWS CLI
-
-    # # Installer Python et pip avec apk
-    # - apk add --no-cache python3 py3-pip  
-
-    # # Créer et activer l'environnement virtuel
-    # - python3 -m venv /tmp/venv
-    # - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
-
-    # # Installer awscli
-    # - pip install awscli  
-
-    # # Configurer AWS CLI avec les variables GitLab
-    # - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-    # - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-    # - aws configure set region $AWS_DEFAULT_REGION
 
     - export TAG="staging_env"
 
@@ -637,11 +440,10 @@ provision_IaC_EC2_staging_and_deploy_staging_environment:
     - echo "HOSTNAME_DEPLOY_STAGING_EC2=$HOSTNAME_DEPLOY_STAGING_EC2" >> deploy.env
     
     - *setup_ssh
-
-        # Attendre que Docker soit prêt sur l'EC2
+    # Attendre que Docker soit prêt sur l'EC2
     - |
       echo "Vérification que Docker est prêt sur l'EC2 ($HOSTNAME_DEPLOY_STAGING_EC2)..."
-      for i in {1..20}; do
+      for i in $(seq 1 20); do
         if ssh -o StrictHostKeyChecking=no ubuntu@$HOSTNAME_DEPLOY_STAGING_EC2 "command -v docker"; then
           echo "✅ Docker est disponible sur l'instance."
           break
@@ -679,29 +481,6 @@ provision_IaC_EC2_staging_and_deploy_staging_environment:
     paths:
       - deploy.env  # Enregistrer l'adresse IP dans un fichier d'environnement
     expire_in: 1 week  # Optionnel, durée de conservation de l'artefact
-  
-    # artifacts:
-    #   reports:
-    #     dotenv: deploy.env
-
-  # rules:
-  #     - changes:
-  #         - Dockerfile
-  #         - webapp/**/*.py
-  #       when: always
-  #     - when: never
-
-
-
-# cleanup_docker:
-#   stage: cleanup
-#   script:
-#     - docker container prune -f
-#     - docker image prune -af
-#     - docker volume prune -f
-#   rules:
-#     - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
-#       when: always
 
 test staging:
   stage: Test staging environment
@@ -709,7 +488,6 @@ test staging:
     name: staging-environment
     url: http://${HOSTNAME_DEPLOY_STAGING_EC2}
   script:
-
     # Installer Python et pip avec apk
     - apk add --no-cache python3 py3-pip  
 
