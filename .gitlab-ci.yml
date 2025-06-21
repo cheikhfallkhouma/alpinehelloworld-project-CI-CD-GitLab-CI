@@ -357,8 +357,10 @@ remove_review_environment:
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
 provision_IaC_EC2_staging_and_deploy_staging_environment:
   stage: IaC EC2 and deploy staging environment
-  only:
-  - main
+  rules:
+  - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE != "merge_request_event"'
+    when: always
+  - when: never
   environment:
     name: staging-environment
     url: http://${HOSTNAME_DEPLOY_STAGING_EC2}
