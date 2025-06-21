@@ -16,6 +16,7 @@ stages:
 - Test review environment
 - Remove review environment
 - IaC EC2 and deploy staging environment
+- Test staging environment
 #- cleanup
 
 
@@ -457,6 +458,10 @@ test_review_environment:
   #         - webapp/**/*.py
   #       when: always
   #     - when: never
+  dependencies:
+  - provision_IaC_EC2_review_and_deploy_review_environment
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
 
 remove_review_environment:
  # <<: *rules_webapp_changes
@@ -522,7 +527,16 @@ remove_review_environment:
 
 
 # Job de provisionnement de l'instance EC2 pour l'environnement staging
-provision_IaC_EC2_staging:
+provision_IaC_EC2_staging_and_deploy_staging_environment:
+  #image: docker:latest
+  #services:
+  #  - docker:dind  # Docker-in-Docker pour pouvoir utiliser Docker dans le pipeline
+  #rules:
+  #   - changes:
+  #       - Dockerfile
+  #       - webapp/**/*.py
+  #     when: always
+  #   - when: never
  # <<: *rules_webapp_changes
   stage: IaC EC2 and deploy staging environment
   only:
@@ -688,3 +702,45 @@ provision_IaC_EC2_staging:
 #   rules:
 #     - if: '$CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"'
 #       when: always
+
+test staging:
+  stage: Test staging environment
+  environment:
+    name: staging-environment
+    url: http://${HOSTNAME_DEPLOY_STAGING_EC2}
+  script:
+
+    # Installer Python et pip avec apk
+    - apk add --no-cache python3 py3-pip  
+
+    # Créer et activer l'environnement virtuel
+    - python3 -m venv /tmp/venv
+    - source /tmp/venv/bin/activate  # Activer l'environnement virtuel
+
+    # Installer awscli
+    - pip install awscli  
+
+    # Configurer AWS CLI avec les variables GitLab
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_DEFAULT_REGION
+
+    - export TAG="staging_env"
+    # Récupérer l'adresse IP publique de l'instance
+    - |
+      PUBLIC_IP=$(aws ec2 describe-instances \
+        --filters "Name=tag:Name,Values=$TAG" \
+        --query "Reservations[*].Instances[*].PublicIpAddress" \
+        --output text)
+
+    # Exporter l'adresse IP pour les étapes suivantes
+    - export HOSTNAME_DEPLOY_STAGING_EC2=$PUBLIC_IP
+    - echo "Instance's public IP is $HOSTNAME_DEPLOY_STAGING_EC2"
+    - apk --no-cache add curl
+    - sleep 10 
+    - curl "http://$HOSTNAME_DEPLOY_STAGING_EC2" | grep -q "Hello world!"
+
+  dependencies:
+  - provision_IaC_EC2_staging_and_deploy_staging_environment
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
