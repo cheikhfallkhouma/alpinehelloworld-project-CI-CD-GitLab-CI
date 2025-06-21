@@ -393,9 +393,9 @@ provision_IaC_EC2_review_and_deploy_review_environment:
     when: always
   - when: never
 
-  # artifacts:
-  #   reports:
-  #     dotenv: deploy.env
+  artifacts:
+    reports:
+      dotenv: deploy.env
   # rules:
   #   - changes:
   #       - Dockerfile
