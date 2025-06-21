@@ -622,22 +622,6 @@ provision_IaC_EC2_staging:
     - cd $INIT_PATH
     - echo "HOSTNAME_DEPLOY_STAGING_EC2=$HOSTNAME_DEPLOY_STAGING_EC2" >> deploy.env
     
-#  # Installation du client SSH pour la connexion à l'instance EC2
-#     - apk add openssh-client
-#     # Démarrage de l'agent SSH pour la gestion de la clé privée
-#     - eval $(ssh-agent -s)
-#     # Création du dossier .ssh avec permissions sécurisées
-#     - mkdir -p ~/.ssh
-#     # Application des permissions pour sécuriser les fichiers SSH
-#     - chmod -R 400 ~/.ssh
-#     # Création d'un fichier known_hosts pour éviter les alertes SSH
-#     - touch ~/.ssh/known_hosts
-#     # Accès au dossier SSH
-#     - cd ~/.ssh
-#     # Ajout de la clé privée SSH depuis une variable GitLab CI/CD
-#     - echo "${SSH_KEY}" > id_rsa
-#      # Application de permissions sécurisées à la clé privée
-#     - chmod 0400 id_rsa
     - *setup_ssh
 
         # Attendre que Docker soit prêt sur l'EC2
