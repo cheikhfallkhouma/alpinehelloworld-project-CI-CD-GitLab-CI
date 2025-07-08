@@ -3,8 +3,6 @@ An Alpine-based Docker example
 
 C'est un projet d'automatisation de pipeline CI CD avec Gitlab CI d'una application développée en Python.
 
-[![Build Status](https://7cb4-41-66-61-53.eu.ngrok.io/buildStatus/icon?job=deployment)](https://7cb4-41-66-61-53.eu.ngrok.io/job/deployment/)
-
 ![image](https://github.com/user-attachments/assets/8d6c7d4f-07d8-4a9c-80b7-81f0947ec061)
 
 ![image](https://github.com/user-attachments/assets/631df458-67e2-4b6b-9761-57b201e3568e)
