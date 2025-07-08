@@ -1,5 +1,4 @@
 # alpinehelloworld
-An Alpine-based Docker example
 
 C'est un projet d'automatisation de pipeline CI CD avec Gitlab CI d'una application développée en Python.
 
